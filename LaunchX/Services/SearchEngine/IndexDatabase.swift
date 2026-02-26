@@ -270,6 +270,72 @@ final class IndexDatabase {
         return paths
     }
 
+    /// Delete records by name pattern (for cleaning up Helper processes)
+    /// - Parameters:
+    ///   - namePattern: The name pattern to match (e.g., "Helper")
+    ///   - completion: Callback with deleted count
+    func deleteByNamePattern(_ namePattern: String, completion: ((Int) -> Void)? = nil) {
+        dbQueue.async { [weak self] in
+            guard let self = self else {
+                DispatchQueue.main.async { completion?(0) }
+                return
+            }
+
+            // 使用 LIKE 查询删除匹配名称模式的记录
+            let escapedPattern = namePattern.replacingOccurrences(of: "'", with: "''")
+            let sql = "DELETE FROM files WHERE name LIKE '%\(escapedPattern)%'"
+
+            self.executeSQL(sql)
+            let deletedCount = Int(sqlite3_changes(self.db))
+
+            print("IndexDatabase: Deleted \(deletedCount) records matching pattern '\(namePattern)'")
+
+            DispatchQueue.main.async {
+                completion?(deletedCount)
+            }
+        }
+    }
+
+    /// Clean up Electron/Chromium helper processes from database
+    /// - Parameter completion: Callback with total deleted count
+    func cleanupHelperProcesses(completion: ((Int) -> Void)? = nil) {
+        dbQueue.async { [weak self] in
+            guard let self = self else {
+                DispatchQueue.main.async { completion?(0) }
+                return
+            }
+
+            // 删除所有包含 Helper 关键词的应用
+            let helperPatterns = [
+                " Helper",
+                " Helper (GPU)",
+                " Helper (Renderer)",
+                " Helper (Plugin)",
+            ]
+
+            var totalDeleted = 0
+
+            self.executeSQL("BEGIN TRANSACTION")
+
+            for pattern in helperPatterns {
+                let escapedPattern = pattern.replacingOccurrences(of: "'", with: "''")
+                let sql = "DELETE FROM files WHERE name LIKE '%\(escapedPattern)%' AND is_app = 1"
+                self.executeSQL(sql)
+                let deleted = Int(sqlite3_changes(self.db))
+                totalDeleted += deleted
+                print("IndexDatabase: Deleted \(deleted) records matching '\(pattern)'")
+            }
+
+            self.executeSQL("COMMIT")
+
+            print("IndexDatabase: Total deleted \(totalDeleted) helper processes")
+
+            DispatchQueue.main.async {
+                completion?(totalDeleted)
+            }
+        }
+    }
+
     /// Load all records from database
     func loadAll(completion: @escaping ([FileRecord]) -> Void) {
         dbQueue.async { [weak self] in

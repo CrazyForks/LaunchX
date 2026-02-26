@@ -254,8 +254,17 @@ final class SearchEngine: ObservableObject {
         if stats.totalCount > 0 {
             print("SearchEngine: Found existing index with \(stats.totalCount) items, loading...")
 
-            // Optimized: Load in batches for better performance with large datasets
-            loadIndexInBatches(startTime: startTime)
+            // First, clean up any helper processes from the database
+            database.cleanupHelperProcesses { [weak self] deletedCount in
+                guard let self = self else { return }
+
+                if deletedCount > 0 {
+                    print("SearchEngine: Cleaned up \(deletedCount) helper processes on startup")
+                }
+
+                // Then load the index in batches
+                self.loadIndexInBatches(startTime: startTime)
+            }
         } else {
             print("SearchEngine: No existing index, building fresh...")
             Task { @MainActor [weak self] in
@@ -393,6 +402,47 @@ final class SearchEngine: ObservableObject {
         fsMonitor.stop()
         searchCache.clear()
         buildFreshIndex()
+    }
+
+    /// Clean up Electron/Chromium helper processes from index
+    /// 清理索引中的 Electron/Chromium 辅助进程
+    @MainActor
+    func cleanupHelperProcesses(completion: ((Int) -> Void)? = nil) {
+        print("SearchEngine: Starting cleanup of helper processes...")
+
+        // 1. 从数据库中删除
+        database.cleanupHelperProcesses { [weak self] deletedCount in
+            guard let self = self else { return }
+
+            print("SearchEngine: Deleted \(deletedCount) helper processes from database")
+
+            // 2. 从内存索引中删除
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+
+                // 重新加载内存索引
+                let records = self.database.loadAllSync()
+                self.memoryIndex.build(from: records) { [weak self] in
+                    guard let self = self else { return }
+
+                    Task { @MainActor [weak self] in
+                        guard let self = self else { return }
+
+                        // 更新统计信息
+                        self.appsCount = self.memoryIndex.appsCount
+                        self.filesCount = self.memoryIndex.filesCount
+                        self.totalCount = self.memoryIndex.totalCount
+
+                        // 清除搜索缓存
+                        self.searchCache.clear()
+
+                        print("SearchEngine: Cleanup complete. New stats - Apps: \(self.appsCount), Files: \(self.filesCount)")
+
+                        completion?(deletedCount)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - File System Monitoring
