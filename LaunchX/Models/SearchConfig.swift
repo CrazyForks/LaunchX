@@ -30,6 +30,8 @@ struct SearchConfig: Codable, Equatable {
     static let defaultExcludedFolderNames: [String] = [
         "node_modules",
         "dist",
+        "assets",
+        "sdk",
     ]
 
     /// Default excluded file extensions
