@@ -36,7 +36,11 @@ struct SearchConfig: Codable, Equatable {
     ]
 
     /// Default excluded file extensions
-    static let defaultExcludedExtensions: [String] = []
+    static let defaultExcludedExtensions: [String] = [
+        ".temp",
+        ".bak",
+        ".log",
+    ]
 
     /// Default excluded paths
     static let defaultExcludedPaths: [String] = []
