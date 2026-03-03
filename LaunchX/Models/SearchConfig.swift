@@ -32,6 +32,7 @@ struct SearchConfig: Codable, Equatable {
         "dist",
         "assets",
         "sdk",
+        ".git",
     ]
 
     /// Default excluded file extensions
