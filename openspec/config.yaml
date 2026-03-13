@@ -1,0 +1,18 @@
+schema: spec-driven
+
+context: |
+    Description: A cli repository maintains some development templates
+    Tech stack：TypeScript, Vue3, React19, Vite, Tan Stack,
+    API conventions: RESTful, JSON responses
+    Style: oxlint, oxfmt, strict TypeScript
+
+rules:
+    proposal:
+        - Include rollback plan
+        - Identify affected components
+    specs:
+        - Use Given/When/Then format for scenarios
+    design:
+        - Include sequence diagrams for complex flows
+    # tasks:
+    #     -
