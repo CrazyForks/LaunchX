@@ -222,7 +222,7 @@ struct BookmarkSearchSettingsView: View {
                     Picker("", selection: $selectedOption) {
                         ForEach(availableOpenWithOptions, id: \.id) { option in
                             HStack(spacing: 6) {
-                                Image(nsImage: resizeIcon(option.icon, to: 16))
+                                Image(nsImage: ImageUtils.resizeIcon(option.icon, to: 16))
                                 Text(option.displayName)
                             }
                             .tag(option)
@@ -301,18 +301,6 @@ struct BookmarkSearchSettingsView: View {
             // 从 settings.openWith 初始化 selectedOption
             selectedOption = BookmarkOpenWithOption.from(settings.openWith)
         }
-    }
-
-    private func resizeIcon(_ icon: NSImage, to size: CGFloat) -> NSImage {
-        let resized = NSImage(size: NSSize(width: size, height: size))
-        resized.lockFocus()
-        icon.draw(
-            in: NSRect(x: 0, y: 0, width: size, height: size),
-            from: NSRect(origin: .zero, size: icon.size),
-            operation: .copy,
-            fraction: 1.0)
-        resized.unlockFocus()
-        return resized
     }
 
     private func updateSourceEnabled(_ source: BookmarkSource, enabled: Bool) {
