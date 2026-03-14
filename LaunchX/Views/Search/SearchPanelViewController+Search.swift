@@ -266,9 +266,10 @@ extension SearchPanelViewController {
         let isExpanded =
             (defaultWindowMode == "full" || isIndependentViewMode)
             || (hasQuery && hasResults)
+            || isInAnyExtensionMode  // 扩展模式下也需要展开
 
-        if defaultWindowMode == "full" || isIndependentViewMode {
-            // Full 模式或独立视图模式：始终展开
+        if defaultWindowMode == "full" || isIndependentViewMode || isInAnyExtensionMode {
+            // Full 模式、独立视图模式或扩展模式：始终展开
             updateWindowHeight(expanded: true)
         } else {
             // Simple 模式：有搜索内容且有结果时展开
