@@ -25,13 +25,14 @@ struct BookmarkSearchSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
                     Image(systemName: AdvancedExtensionType.bookmarkSearch.sfSymbolName)
-                        .font(.system(size: 24))
+                        .font(.system(size: SettingsHeaderStyle.iconSize))
                         .foregroundColor(AdvancedExtensionType.bookmarkSearch.iconColor)
+                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
                     Text("搜索书签")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(SettingsHeaderStyle.titleFont)
+                        .fontWeight(SettingsHeaderStyle.titleFontWeight)
                     Spacer()
 
                     Toggle("", isOn: $settings.isEnabled)
@@ -40,9 +41,9 @@ struct BookmarkSearchSettingsView: View {
                             settings.save()
                         }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+                .padding(.horizontal, SettingsHeaderStyle.horizontalPadding)
+                .padding(.top, SettingsHeaderStyle.topPadding)
+                .padding(.bottom, SettingsHeaderStyle.bottomPadding)
 
                 Divider()
 

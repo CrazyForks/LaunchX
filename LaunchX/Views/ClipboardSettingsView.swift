@@ -18,13 +18,14 @@ struct ClipboardSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题行
-                HStack(spacing: 12) {
+                HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
                     Image(systemName: "doc.on.clipboard.fill")
-                        .font(.system(size: 24))
+                        .font(.system(size: SettingsHeaderStyle.iconSize))
                         .foregroundColor(.blue)
+                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
                     Text("剪贴板")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(SettingsHeaderStyle.titleFont)
+                        .fontWeight(SettingsHeaderStyle.titleFontWeight)
                     Spacer()
                     Toggle("", isOn: $settings.isEnabled)
                         .toggleStyle(.switch)
@@ -37,9 +38,9 @@ struct ClipboardSettingsView: View {
                             }
                         }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+                .padding(.horizontal, SettingsHeaderStyle.horizontalPadding)
+                .padding(.top, SettingsHeaderStyle.topPadding)
+                .padding(.bottom, SettingsHeaderStyle.bottomPadding)
 
                 Divider()
 

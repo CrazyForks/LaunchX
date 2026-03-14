@@ -13,18 +13,19 @@ struct TerminalSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题行
-                HStack {
+                HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
                     Image(systemName: "terminal.fill")
-                        .font(.system(size: 24))
+                        .font(.system(size: SettingsHeaderStyle.iconSize))
                         .foregroundColor(.gray)
+                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
                     Text("终端设置")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(SettingsHeaderStyle.titleFont)
+                        .fontWeight(SettingsHeaderStyle.titleFontWeight)
                     Spacer()
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+                .padding(.horizontal, SettingsHeaderStyle.horizontalPadding)
+                .padding(.top, SettingsHeaderStyle.topPadding)
+                .padding(.bottom, SettingsHeaderStyle.bottomPadding)
 
                 Divider()
 
