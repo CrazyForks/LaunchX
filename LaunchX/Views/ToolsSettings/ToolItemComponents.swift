@@ -246,9 +246,9 @@ struct ToolHotKeyButton: View {
                     HStack(spacing: 2) {
                         ForEach(HotKeyService.modifierSymbols(for: hotKey.modifiers), id: \.self) {
                             symbol in
-                            ToolKeyCapView(text: symbol)
+                            KeyCapView(text: symbol, size: .small)
                         }
-                        ToolKeyCapView(text: HotKeyService.keyString(for: hotKey.keyCode))
+                        KeyCapView(text: HotKeyService.keyString(for: hotKey.keyCode), size: .small)
                     }
                 } else {
                     Text("快捷键")
@@ -270,21 +270,6 @@ struct ToolHotKeyButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-    }
-}
-
-// MARK: - 按键帽视图
-
-struct ToolKeyCapView: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 10, weight: .medium, design: .rounded))
-            .padding(.horizontal, 3)
-            .padding(.vertical, 2)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(3)
     }
 }
 
