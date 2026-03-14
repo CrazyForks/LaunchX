@@ -9,8 +9,6 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case aiTranslate = "AI 翻译"
     case bookmarkSearch = "搜索书签"
     case twoFactorAuth = "2FA 短信"
-    case memeSearch = "表情包"
-    case memeFavorite = "表情收藏"
     case terminal = "终端"
 
     var id: String { rawValue }
@@ -41,8 +39,6 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .aiTranslate: return "character.bubble.fill"
         case .bookmarkSearch: return "bookmark.fill"
         case .twoFactorAuth: return "lock.shield.fill"
-        case .memeSearch: return "face.smiling"
-        case .memeFavorite: return "star.fill"
         case .terminal: return "terminal"
         }
     }
@@ -55,8 +51,6 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .aiTranslate: return .indigo
         case .bookmarkSearch: return .pink
         case .twoFactorAuth: return .green
-        case .memeSearch: return .orange
-        case .memeFavorite: return .yellow
         case .terminal: return .blue
         }
     }
@@ -113,10 +107,6 @@ struct AdvancedExtensionsView: View {
             TwoFactorAuthSettingsView()
         case .aiTranslate:
             AITranslateSettingsView()
-        case .memeSearch:
-            MemeSearchSettingsView()
-        case .memeFavorite:
-            MemeFavoriteSettingsView()
         case .terminal:
             TerminalSettingsView()
         }
@@ -161,8 +151,24 @@ struct BookmarkSearchSettingsView: View {
     @State private var bookmarkCount: Int = 0
     @State private var safariAccessible: Bool = true
     @State private var showHotKeyPopover: Bool = false
+    @State private var selectedOption: BookmarkOpenWithOption = .special(.defaultBrowser)
 
     private let labelWidth: CGFloat = 140
+
+    // 动态生成可用的打开浏览器选项
+    private var availableOpenWithOptions: [BookmarkOpenWithOption] {
+        var options: [BookmarkOpenWithOption] = [
+            .special(.bookmarkBrowser),
+            .special(.defaultBrowser)
+        ]
+
+        // 添加已安装的浏览器
+        for source in BookmarkSource.allCases where source.isInstalled {
+            options.append(.browser(source))
+        }
+
+        return options
+    }
 
     var body: some View {
         ScrollView {
@@ -213,8 +219,8 @@ struct BookmarkSearchSettingsView: View {
                 HStack {
                     Text("打开浏览器:")
                         .frame(width: labelWidth, alignment: .trailing)
-                    Picker("", selection: $settings.openWith) {
-                        ForEach(BookmarkOpenWith.allCases, id: \.self) { option in
+                    Picker("", selection: $selectedOption) {
+                        ForEach(availableOpenWithOptions, id: \.id) { option in
                             HStack(spacing: 6) {
                                 Image(nsImage: resizeIcon(option.icon, to: 16))
                                 Text(option.displayName)
@@ -225,7 +231,8 @@ struct BookmarkSearchSettingsView: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(width: 150)
-                    .onChange(of: settings.openWith) { _, _ in
+                    .onChange(of: selectedOption) { _, newValue in
+                        settings.openWith = newValue.toBookmarkOpenWith()
                         settings.save()
                     }
                     Spacer()
@@ -239,22 +246,15 @@ struct BookmarkSearchSettingsView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    // Safari
-                    BrowserToggleRow(
-                        source: .safari,
-                        isEnabled: settings.enabledSources.contains(.safari),
-                        isAccessible: safariAccessible
-                    ) { enabled in
-                        updateSourceEnabled(.safari, enabled: enabled)
-                    }
-
-                    // Chrome
-                    BrowserToggleRow(
-                        source: .chrome,
-                        isEnabled: settings.enabledSources.contains(.chrome),
-                        isAccessible: true
-                    ) { enabled in
-                        updateSourceEnabled(.chrome, enabled: enabled)
+                    // 动态显示已安装的浏览器
+                    ForEach(BookmarkSource.allCases.filter { $0.isInstalled }, id: \.self) { source in
+                        BrowserToggleRow(
+                            source: source,
+                            isEnabled: settings.enabledSources.contains(source),
+                            isAccessible: source == .safari ? safariAccessible : true
+                        ) { enabled in
+                            updateSourceEnabled(source, enabled: enabled)
+                        }
                     }
 
                     // 书签统计和刷新
@@ -298,6 +298,8 @@ struct BookmarkSearchSettingsView: View {
         .onAppear {
             checkAccess()
             refreshBookmarks()
+            // 从 settings.openWith 初始化 selectedOption
+            selectedOption = BookmarkOpenWithOption.from(settings.openWith)
         }
     }
 

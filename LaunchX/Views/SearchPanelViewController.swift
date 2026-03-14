@@ -31,10 +31,10 @@ class SearchPanelViewController: NSViewController {
     private let searchEngine = SearchEngine.shared
     private var isShowingRecents: Bool = false  // 是否正在显示最近使用
 
-    /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA、表情包等）
+    /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA等）
     private var isInAnyExtensionMode: Bool {
         return isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInMemeMode || isInFavoriteMode
+            || isInBookmarkMode || isIn2FAMode
     }
 
     // IDE 项目模式状态
@@ -65,28 +65,6 @@ class SearchPanelViewController: NSViewController {
     // 2FA 短信模式状态
     private var isIn2FAMode: Bool = false
     private var twoFAResults: [TwoFactorCodeItem] = []
-
-    // 表情包搜索模式状态
-    private var isInMemeMode: Bool = false
-    private var memeResults: [MemeItem] = []
-    private var memeSelectedRow: Int = 0
-    private var memeSelectedCol: Int = 0
-    private let memeColumnCount: Int = 4  // 每行显示 4 个
-    private var memeSearchDebounceWorkItem: DispatchWorkItem?  // 搜索防抖
-    private var currentMemeSearchKeyword: String = ""  // 当前搜索关键词（用于收藏时记录）
-
-    // MARK: - 表情包收藏模式相关属性
-
-    private var isInFavoriteMode: Bool = false
-    private var favoriteResults: [MemeFavoriteItem] = []
-    private var favoriteSelectedRow: Int = 0
-    private var favoriteSelectedCol: Int = 0
-
-    // 表情包搜索 UI 组件
-    private let memeCollectionView = NSCollectionView()
-    private let memeScrollView = NSScrollView()
-    private var memeLoadingIndicator: NSProgressIndicator?
-    private var memeLoadingCount = 0  // 追踪正在加载的图片数量
 
     // IP 查询结果
     var ipQueryResults: [(label: String, ip: String)] = []
@@ -370,22 +348,6 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnter2FAModeDirectly),
             name: .enter2FAModeDirectly,
-            object: nil
-        )
-
-        // 监听直接进入表情包模式的通知（由快捷键触发）
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleEnterMemeModeDirectly),
-            name: .enterMemeModeDirectly,
-            object: nil
-        )
-
-        // 监听直接进入收藏模式的通知
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleEnterFavoriteModeDirectly),
-            name: .enterFavoriteModeDirectly,
             object: nil
         )
 
@@ -976,698 +938,6 @@ class SearchPanelViewController: NSViewController {
 
     // MARK: - 表情包搜索模式
 
-    /// 处理直接进入表情包模式的通知
-    @objc private func handleEnterMemeModeDirectly() {
-        print("SearchPanelViewController: handleEnterMemeModeDirectly called")
-
-        // 如果已经在表情包模式中，忽略
-        if isInMemeMode {
-            print("SearchPanelViewController: Already in meme mode, ignoring")
-            return
-        }
-
-        // 如果在其他扩展模式中，先清理
-        if isInAnyExtensionMode {
-            cleanupAllExtensionModes()
-        }
-
-        // 进入表情包模式
-        isInMemeMode = true
-
-        // 更新 UI
-        updateMemeModeUI()
-        updateVisibility()
-
-        // 清空结果，等待用户搜索
-        memeResults = []
-        memeSelectedRow = 0
-        memeSelectedCol = 0
-        reloadMemeCollectionView()
-
-        print("SearchPanelViewController: Meme mode setup complete")
-    }
-
-    /// 进入表情包模式（通过别名搜索选择）
-    private func enterMemeMode() {
-        // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode
-        {
-            cleanupAllExtensionModes()
-        }
-
-        // 进入表情包模式
-        isInMemeMode = true
-
-        // 更新 UI
-        updateMemeModeUI()
-
-        // 清空结果，等待用户搜索
-        memeResults = []
-        memeSelectedRow = 0
-        memeSelectedCol = 0
-        reloadMemeCollectionView()
-
-        print("SearchPanelViewController: Entered meme mode via alias")
-    }
-
-    /// 更新表情包模式 UI
-    private func updateMemeModeUI() {
-        clearCalculatorResult()
-
-        // 显示标签
-        ideTagView.isHidden = false
-        let memeIcon =
-            NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Meme")
-            ?? NSImage()
-        memeIcon.size = NSSize(width: 16, height: 16)
-        ideIconView.image = memeIcon
-        ideNameLabel.stringValue = "表情包"
-
-        // 切换 searchField 的 leading 约束
-        searchFieldLeadingToIcon?.isActive = false
-        searchFieldLeadingToTag?.isActive = true
-
-        // 更新搜索框
-        searchField.stringValue = ""
-        setPlaceholder("搜索表情包...")
-
-        // 隐藏普通列表，显示表情包网格
-        scrollView.isHidden = true
-        memeScrollView.isHidden = false
-        divider.isHidden = false
-
-        // 更新窗口高度
-        updateWindowHeight(expanded: true)
-
-        // 聚焦搜索框
-        view.window?.makeFirstResponder(searchField)
-    }
-
-    /// 退出表情包模式
-    private func exitMemeMode() {
-        guard isInMemeMode else { return }
-
-        isInMemeMode = false
-        memeResults = []
-        memeSelectedRow = 0
-        memeSelectedCol = 0
-        currentMemeSearchKeyword = ""
-
-        // 隐藏表情包视图
-        memeScrollView.isHidden = true
-
-        // 取消正在进行的搜索和图片加载
-        memeSearchDebounceWorkItem?.cancel()
-        MemeSearchService.shared.cancelAllLoads()
-
-        // 恢复 UI
-        restoreNormalModeUI()
-
-        // 恢复搜索状态
-        searchField.stringValue = ""
-        setPlaceholder("搜索应用或文档...")
-        resetState()
-    }
-
-    // MARK: - 表情包收藏模式
-
-    /// 直接进入收藏模式的通知处理
-    @objc private func handleEnterFavoriteModeDirectly() {
-        print("SearchPanelViewController: handleEnterFavoriteModeDirectly called")
-
-        // 如果已经在收藏模式中，忽略
-        if isInFavoriteMode {
-            print("SearchPanelViewController: Already in favorite mode, ignoring")
-            return
-        }
-
-        // 如果在其他扩展模式中，先清理
-        if isInAnyExtensionMode {
-            cleanupAllExtensionModes()
-        }
-
-        // 进入收藏模式
-        isInFavoriteMode = true
-
-        // 更新 UI
-        updateFavoriteModeUI()
-        updateVisibility()
-
-        // 加载所有收藏
-        favoriteResults = MemeFavoriteService.shared.getAllFavorites()
-        favoriteSelectedRow = 0
-        favoriteSelectedCol = 0
-        reloadFavoriteCollectionView()
-
-        // 选中第一个
-        if !favoriteResults.isEmpty {
-            updateFavoriteSelection()
-        }
-
-        print("SearchPanelViewController: Favorite mode setup complete")
-    }
-
-    /// 进入收藏模式（通过别名搜索选择）
-    private func enterFavoriteMode() {
-        // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInMemeMode
-        {
-            cleanupAllExtensionModes()
-        }
-
-        // 进入收藏模式
-        isInFavoriteMode = true
-
-        // 更新 UI
-        updateFavoriteModeUI()
-
-        // 加载所有收藏
-        favoriteResults = MemeFavoriteService.shared.getAllFavorites()
-        favoriteSelectedRow = 0
-        favoriteSelectedCol = 0
-        reloadFavoriteCollectionView()
-
-        // 选中第一个
-        if !favoriteResults.isEmpty {
-            updateFavoriteSelection()
-        }
-
-        print("SearchPanelViewController: Entered favorite mode via alias")
-    }
-
-    /// 更新收藏模式 UI
-    private func updateFavoriteModeUI() {
-        clearCalculatorResult()
-
-        // 显示标签
-        ideTagView.isHidden = false
-        let favoriteIcon =
-            NSImage(systemSymbolName: "star.fill", accessibilityDescription: "Favorite")
-            ?? NSImage()
-        favoriteIcon.size = NSSize(width: 16, height: 16)
-        ideIconView.image = favoriteIcon
-        ideNameLabel.stringValue = "收藏"
-
-        // 切换 searchField 的 leading 约束
-        searchFieldLeadingToIcon?.isActive = false
-        searchFieldLeadingToTag?.isActive = true
-
-        // 更新搜索框
-        searchField.stringValue = ""
-        setPlaceholder("搜索收藏的表情包...")
-
-        // 隐藏普通列表，显示表情包网格（复用 meme 的 CollectionView）
-        scrollView.isHidden = true
-        memeScrollView.isHidden = false
-        divider.isHidden = false
-
-        // 更新窗口高度
-        updateWindowHeight(expanded: true)
-
-        // 聚焦搜索框
-        view.window?.makeFirstResponder(searchField)
-    }
-
-    /// 退出收藏模式
-    private func exitFavoriteMode() {
-        guard isInFavoriteMode else { return }
-
-        isInFavoriteMode = false
-        favoriteResults = []
-        favoriteSelectedRow = 0
-        favoriteSelectedCol = 0
-
-        // 隐藏表情包视图
-        memeScrollView.isHidden = true
-
-        // 恢复 UI
-        restoreNormalModeUI()
-
-        // 恢复搜索状态
-        searchField.stringValue = ""
-        setPlaceholder("搜索应用或文档...")
-        resetState()
-    }
-
-    /// 执行收藏搜索
-    private func performFavoriteSearch(_ query: String) {
-        if query.isEmpty {
-            favoriteResults = MemeFavoriteService.shared.getAllFavorites()
-        } else {
-            favoriteResults = MemeFavoriteService.shared.searchFavorites(keyword: query)
-        }
-
-        favoriteSelectedRow = 0
-        favoriteSelectedCol = 0
-        reloadFavoriteCollectionView()
-
-        // 选中第一个
-        if !favoriteResults.isEmpty {
-            updateFavoriteSelection()
-        }
-    }
-
-    /// 重新加载收藏集合视图
-    private func reloadFavoriteCollectionView() {
-        memeCollectionView.reloadData()
-
-        // 更新 no results 状态
-        if isInFavoriteMode && favoriteResults.isEmpty {
-            if searchField.stringValue.isEmpty {
-                noResultsLabel.stringValue = "暂无收藏"
-            } else {
-                noResultsLabel.stringValue = "未找到匹配的收藏"
-            }
-            noResultsLabel.isHidden = false
-        } else {
-            noResultsLabel.isHidden = true
-        }
-    }
-
-    /// 更新收藏选中状态
-    private func updateFavoriteSelection() {
-        let index = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-        guard index < favoriteResults.count else { return }
-
-        let indexPath = IndexPath(item: index, section: 0)
-
-        // 使用 NSCollectionView 的选中机制
-        memeCollectionView.deselectAll(nil)
-        memeCollectionView.selectItems(at: [indexPath], scrollPosition: .centeredVertically)
-    }
-
-    /// 复制选中的收藏到剪贴板
-    private func copySelectedFavorite() {
-        let index = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-        guard index < favoriteResults.count else { return }
-
-        let favorite = favoriteResults[index]
-        let settings = MemeFavoriteSettings.load()
-
-        // 显示加载指示器
-        showMemeLoadingIndicator()
-
-        // 复制到剪贴板
-        MemeFavoriteService.shared.copyFavoriteToClipboard(favorite: favorite) {
-            [weak self] success in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.hideMemeLoadingIndicator()
-
-                if success {
-                    PanelManager.shared.hidePanel()
-
-                    // 根据设置执行粘贴动作
-                    if settings.actionType == .copyAndPaste {
-                        self.performPasteAction()
-                    }
-                } else {
-                    print("SearchPanelViewController: Failed to copy favorite")
-                }
-            }
-        }
-    }
-
-    /// 模拟粘贴动作 (Cmd+V)
-    private func performPasteAction() {
-        // 延迟执行以确保面板已隐藏且目标应用已激活
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            let source = CGEventSource(stateID: .combinedSessionState)
-
-            // 创建 Cmd+V 按下事件
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)  // V key
-            keyDown?.flags = .maskCommand
-
-            // 创建 Cmd+V 释放事件
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-            keyUp?.flags = .maskCommand
-
-            // 发送事件
-            keyDown?.post(tap: .cghidEventTap)
-            keyUp?.post(tap: .cghidEventTap)
-        }
-    }
-
-    /// 执行表情包搜索
-    private func performMemeSearch(_ query: String) {
-        guard !query.isEmpty else {
-            memeResults = []
-            reloadMemeCollectionView()
-            return
-        }
-
-        // 显示加载指示器
-        showMemeLoadingIndicator()
-
-        MemeSearchService.shared.search(keyword: query) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self = self, self.isInMemeMode else { return }
-
-                self.hideMemeLoadingIndicator()
-
-                switch result {
-                case .success(let items):
-                    self.memeResults = items
-                    self.memeSelectedRow = 0
-                    self.memeSelectedCol = 0
-                    self.reloadMemeCollectionView()
-
-                    // 选中第一个
-                    if !items.isEmpty {
-                        self.updateMemeSelection()
-                    }
-                case .failure(let error):
-                    print(
-                        "SearchPanelViewController: Meme search failed - \(error.localizedDescription)"
-                    )
-                    self.memeResults = []
-                    self.reloadMemeCollectionView()
-                }
-            }
-        }
-    }
-
-    /// 重新加载表情包集合视图
-    private func reloadMemeCollectionView() {
-        memeCollectionView.reloadData()
-
-        // 更新 no results 状态
-        if isInMemeMode && memeResults.isEmpty && !searchField.stringValue.isEmpty {
-            noResultsLabel.stringValue = "未找到表情包"
-            noResultsLabel.isHidden = false
-        } else {
-            noResultsLabel.isHidden = true
-        }
-    }
-
-    /// 显示加载指示器（基于计数）
-    private func showMemeLoadingIndicator() {
-        if memeLoadingIndicator == nil {
-            let indicator = NSProgressIndicator()
-            indicator.style = .spinning
-            indicator.controlSize = .regular
-            indicator.translatesAutoresizingMaskIntoConstraints = false
-            memeScrollView.addSubview(indicator)
-            NSLayoutConstraint.activate([
-                indicator.centerXAnchor.constraint(equalTo: memeScrollView.centerXAnchor),
-                indicator.centerYAnchor.constraint(equalTo: memeScrollView.centerYAnchor),
-            ])
-            memeLoadingIndicator = indicator
-        }
-        memeLoadingIndicator?.startAnimation(nil)
-        memeLoadingIndicator?.isHidden = false
-    }
-
-    /// 隐藏加载指示器
-    private func hideMemeLoadingIndicator() {
-        memeLoadingIndicator?.stopAnimation(nil)
-        memeLoadingIndicator?.isHidden = true
-    }
-
-    /// 增加加载计数
-    func incrementMemeLoadingCount() {
-        memeLoadingCount += 1
-        if memeLoadingCount == 1 {
-            showMemeLoadingIndicator()
-        }
-    }
-
-    /// 减少加载计数
-    func decrementMemeLoadingCount() {
-        memeLoadingCount = max(0, memeLoadingCount - 1)
-        if memeLoadingCount == 0 {
-            hideMemeLoadingIndicator()
-        }
-    }
-
-    /// 重置加载计数
-    func resetMemeLoadingCount() {
-        memeLoadingCount = 0
-        hideMemeLoadingIndicator()
-    }
-
-    /// 更新表情包选中状态
-    private func updateMemeSelection() {
-        let index = memeSelectedRow * memeColumnCount + memeSelectedCol
-        guard index < memeResults.count else { return }
-
-        let indexPath = IndexPath(item: index, section: 0)
-
-        // 清除之前的选中状态
-        memeCollectionView.deselectAll(nil)
-        memeCollectionView.selectItems(at: [indexPath], scrollPosition: .centeredVertically)
-    }
-
-    /// 表情包模式键盘导航 - 向上
-    private func moveMemeSelectionUp() {
-        guard !memeResults.isEmpty else { return }
-        if memeSelectedRow > 0 {
-            memeSelectedRow -= 1
-            // 调整列以确保不超出范围
-            let index = memeSelectedRow * memeColumnCount + memeSelectedCol
-            if index >= memeResults.count {
-                memeSelectedCol = (memeResults.count - 1) % memeColumnCount
-            }
-            updateMemeSelection()
-        }
-    }
-
-    /// 表情包模式键盘导航 - 向下
-    private func moveMemeSelectionDown() {
-        guard !memeResults.isEmpty else { return }
-        let totalRows = (memeResults.count + memeColumnCount - 1) / memeColumnCount
-        if memeSelectedRow < totalRows - 1 {
-            memeSelectedRow += 1
-            // 调整列以确保不超出范围
-            let index = memeSelectedRow * memeColumnCount + memeSelectedCol
-            if index >= memeResults.count {
-                memeSelectedCol = (memeResults.count - 1) % memeColumnCount
-            }
-            updateMemeSelection()
-        }
-    }
-
-    /// 表情包模式键盘导航 - 向左
-    private func moveMemeSelectionLeft() {
-        guard !memeResults.isEmpty else { return }
-        if memeSelectedCol > 0 {
-            memeSelectedCol -= 1
-            updateMemeSelection()
-        } else if memeSelectedRow > 0 {
-            // 移到上一行末尾
-            memeSelectedRow -= 1
-            memeSelectedCol = memeColumnCount - 1
-            updateMemeSelection()
-        }
-    }
-
-    /// 表情包模式键盘导航 - 向右
-    private func moveMemeSelectionRight() {
-        guard !memeResults.isEmpty else { return }
-        let currentIndex = memeSelectedRow * memeColumnCount + memeSelectedCol
-        if currentIndex < memeResults.count - 1 {
-            if memeSelectedCol < memeColumnCount - 1 {
-                memeSelectedCol += 1
-            } else {
-                // 移到下一行开头
-                memeSelectedRow += 1
-                memeSelectedCol = 0
-            }
-            updateMemeSelection()
-        }
-    }
-
-    // MARK: - 收藏模式键盘导航
-
-    /// 收藏模式键盘导航 - 向上
-    private func moveFavoriteSelectionUp() {
-        guard !favoriteResults.isEmpty else { return }
-        if favoriteSelectedRow > 0 {
-            favoriteSelectedRow -= 1
-            // 调整列以确保不超出范围
-            let index = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-            if index >= favoriteResults.count {
-                favoriteSelectedCol = (favoriteResults.count - 1) % memeColumnCount
-            }
-            updateFavoriteSelection()
-        }
-    }
-
-    /// 收藏模式键盘导航 - 向下
-    private func moveFavoriteSelectionDown() {
-        guard !favoriteResults.isEmpty else { return }
-        let totalRows = (favoriteResults.count + memeColumnCount - 1) / memeColumnCount
-        if favoriteSelectedRow < totalRows - 1 {
-            favoriteSelectedRow += 1
-            // 调整列以确保不超出范围
-            let index = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-            if index >= favoriteResults.count {
-                favoriteSelectedCol = (favoriteResults.count - 1) % memeColumnCount
-            }
-            updateFavoriteSelection()
-        }
-    }
-
-    /// 收藏模式键盘导航 - 向左
-    private func moveFavoriteSelectionLeft() {
-        guard !favoriteResults.isEmpty else { return }
-        if favoriteSelectedCol > 0 {
-            favoriteSelectedCol -= 1
-            updateFavoriteSelection()
-        } else if favoriteSelectedRow > 0 {
-            // 移到上一行末尾
-            favoriteSelectedRow -= 1
-            favoriteSelectedCol = memeColumnCount - 1
-            updateFavoriteSelection()
-        }
-    }
-
-    /// 收藏模式键盘导航 - 向右
-    private func moveFavoriteSelectionRight() {
-        guard !favoriteResults.isEmpty else { return }
-        let currentIndex = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-        if currentIndex < favoriteResults.count - 1 {
-            if favoriteSelectedCol < memeColumnCount - 1 {
-                favoriteSelectedCol += 1
-            } else {
-                // 移到下一行开头
-                favoriteSelectedRow += 1
-                favoriteSelectedCol = 0
-            }
-            updateFavoriteSelection()
-        }
-    }
-
-    /// 处理表情包双击事件
-    @objc private func handleMemeDoubleClick(_ gesture: NSClickGestureRecognizer) {
-        let point = gesture.location(in: memeCollectionView)
-        guard let indexPath = memeCollectionView.indexPathForItem(at: point) else { return }
-
-        if isInFavoriteMode {
-            // 收藏模式
-            favoriteSelectedRow = indexPath.item / memeColumnCount
-            favoriteSelectedCol = indexPath.item % memeColumnCount
-            updateFavoriteSelection()
-            copySelectedFavorite()
-        } else if isInMemeMode {
-            // 表情包模式
-            memeSelectedRow = indexPath.item / memeColumnCount
-            memeSelectedCol = indexPath.item % memeColumnCount
-            updateMemeSelection()
-            copySelectedMeme()
-        }
-    }
-
-    /// 复制选中的表情包到剪贴板
-    private func copySelectedMeme() {
-        let index = memeSelectedRow * memeColumnCount + memeSelectedCol
-        guard index < memeResults.count else { return }
-
-        let meme = memeResults[index]
-        let settings = MemeSearchSettings.load()
-
-        // 显示加载指示器
-        showMemeLoadingIndicator()
-
-        // 下载图片并复制到剪贴板
-        MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, data in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.hideMemeLoadingIndicator()
-
-                if let image = image {
-                    // 使用返回的原始数据用于 GIF
-                    let gifData = meme.isGif ? data : nil
-                    MemeSearchService.shared.copyToClipboard(
-                        image: image, isGif: meme.isGif, gifData: gifData)
-
-                    // 检查是否启用了自动收藏
-                    let favoriteSettings = MemeFavoriteSettings.load()
-                    if favoriteSettings.isEnabled && favoriteSettings.autoFavorite {
-                        // 自动添加到收藏（如果尚未收藏）
-                        if let imageData = data,
-                            !MemeFavoriteService.shared.isFavorited(url: meme.imageURL)
-                        {
-                            MemeFavoriteService.shared.addFavorite(
-                                imageData: imageData,
-                                description: meme.description,
-                                searchKeyword: self.currentMemeSearchKeyword,
-                                isGif: meme.isGif,
-                                originalURL: meme.imageURL
-                            )
-                        }
-                    }
-
-                    PanelManager.shared.hidePanel()
-
-                    // 根据设置执行粘贴动作
-                    if settings.actionType == .copyAndPaste {
-                        self.performPasteAction()
-                    }
-                } else {
-                    // 复制失败，显示提示
-                    print("SearchPanelViewController: Failed to copy meme image")
-                }
-            }
-        }
-    }
-
-    /// 检查表情包别名匹配
-    private func checkMemeAliasMatch(query: String) -> SearchResult? {
-        let settings = MemeSearchSettings.load()
-        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
-
-        let queryLower = query.lowercased()
-        let aliasLower = settings.alias.lowercased()
-
-        // 检查是否匹配别名（前缀匹配或完全匹配）
-        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
-
-        // 创建表情包入口结果
-        let memeIcon =
-            NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Meme")
-            ?? NSImage()
-        memeIcon.size = NSSize(width: 32, height: 32)
-
-        return SearchResult(
-            name: "表情包搜索",
-            path: "meme-entry",
-            icon: memeIcon,
-            isDirectory: false,
-            displayAlias: settings.alias,
-            isMemeEntry: true
-        )
-    }
-
-    /// 检查表情包收藏别名匹配
-    private func checkFavoriteAliasMatch(query: String) -> SearchResult? {
-        let settings = MemeFavoriteSettings.load()
-        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
-
-        let queryLower = query.lowercased()
-        let aliasLower = settings.alias.lowercased()
-
-        // 检查是否匹配别名（前缀匹配或完全匹配）
-        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
-
-        // 创建收藏入口结果
-        let favoriteIcon =
-            NSImage(systemSymbolName: "star.fill", accessibilityDescription: "Favorite")
-            ?? NSImage()
-        favoriteIcon.size = NSSize(width: 32, height: 32)
-
-        return SearchResult(
-            name: "表情收藏",
-            path: "favorite-entry",
-            icon: favoriteIcon,
-            isDirectory: false,
-            displayAlias: settings.alias,
-            isFavoriteEntry: true
-        )
-    }
-
     // MARK: - Setup
 
     private func setupUI() {
@@ -1825,9 +1095,6 @@ class SearchPanelViewController: NSViewController {
         // Base64 编码解码 UI 设置
         setupBase64CoderUI()
 
-        // 表情包搜索 UI 设置
-        setupMemeSearchUI()
-
         // 计算器结果预览设置
         calculatorResultLabel.textColor = .secondaryLabelColor
         calculatorResultLabel.font = searchField.font
@@ -1855,58 +1122,6 @@ class SearchPanelViewController: NSViewController {
             equalTo: searchField.trailingAnchor)
         calcTrailing.priority = .defaultHigh
         calcTrailing.isActive = true
-    }
-
-    /// 设置表情包搜索 UI
-    private func setupMemeSearchUI() {
-        // 配置 CollectionView 的流布局
-        let flowLayout = NSCollectionViewFlowLayout()
-        flowLayout.itemSize = NSSize(width: 140, height: 140)
-        flowLayout.minimumInteritemSpacing = 10
-        flowLayout.minimumLineSpacing = 10
-        flowLayout.sectionInset = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
-
-        memeCollectionView.collectionViewLayout = flowLayout
-        memeCollectionView.delegate = self
-        memeCollectionView.dataSource = self
-        memeCollectionView.backgroundColors = [.clear]
-        memeCollectionView.isSelectable = true
-        memeCollectionView.allowsMultipleSelection = false
-
-        // 添加双击手势识别器
-        let doubleClickGesture = NSClickGestureRecognizer(
-            target: self, action: #selector(handleMemeDoubleClick(_:)))
-        doubleClickGesture.numberOfClicksRequired = 2
-        memeCollectionView.addGestureRecognizer(doubleClickGesture)
-
-        // 设置右键菜单
-        let contextMenu = NSMenu()
-        contextMenu.delegate = self
-        memeCollectionView.menu = contextMenu
-
-        // 注册 Cell
-        memeCollectionView.register(
-            MemeCollectionViewItem.self,
-            forItemWithIdentifier: NSUserInterfaceItemIdentifier("MemeCell")
-        )
-
-        // 配置 ScrollView
-        memeScrollView.documentView = memeCollectionView
-        memeScrollView.hasVerticalScroller = true
-        memeScrollView.hasHorizontalScroller = false
-        memeScrollView.autohidesScrollers = true
-        memeScrollView.drawsBackground = false
-        memeScrollView.translatesAutoresizingMaskIntoConstraints = false
-        memeScrollView.isHidden = true
-        contentView.addSubview(memeScrollView)
-
-        // 约束
-        NSLayoutConstraint.activate([
-            memeScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            memeScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            memeScrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
-            memeScrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-        ])
     }
 
     /// 设置 UUID 生成器 UI
@@ -2515,31 +1730,6 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
-        // 如果在表情包模式，先恢复普通模式 UI
-        if isInMemeMode {
-            isInMemeMode = false
-            memeResults = []
-            memeSelectedRow = 0
-            memeSelectedCol = 0
-            memeScrollView.isHidden = true
-            memeSearchDebounceWorkItem?.cancel()
-            // 取消所有正在进行的图片加载请求
-            MemeSearchService.shared.cancelAllLoads()
-            restoreNormalModeUI()
-            setPlaceholder("搜索应用或文档...")
-        }
-
-        // 如果在收藏模式，先恢复普通模式 UI
-        if isInFavoriteMode {
-            isInFavoriteMode = false
-            favoriteResults = []
-            favoriteSelectedRow = 0
-            favoriteSelectedCol = 0
-            memeScrollView.isHidden = true
-            restoreNormalModeUI()
-            setPlaceholder("搜索应用或文档...")
-        }
-
         // 重置计算器状态
         clearCalculatorResult()
 
@@ -2674,12 +1864,6 @@ class SearchPanelViewController: NSViewController {
         // 检查是否匹配 2FA 别名（用于显示 2FA 入口）
         let twoFAEntryResult = check2FAAliasMatch(query: query)
 
-        // 检查是否匹配表情包别名（用于显示表情包入口）
-        let memeEntryResult = checkMemeAliasMatch(query: query)
-
-        // 检查是否匹配收藏别名（用于显示收藏入口）
-        let favoriteEntryResult = checkFavoriteAliasMatch(query: query)
-
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
@@ -2692,12 +1876,6 @@ class SearchPanelViewController: NSViewController {
         }
         if let twoFAEntry = twoFAEntryResult {
             finalResults.append(twoFAEntry)
-        }
-        if let memeEntry = memeEntryResult {
-            finalResults.append(memeEntry)
-        }
-        if let favoriteEntry = favoriteEntryResult {
-            finalResults.append(favoriteEntry)
         }
 
         if sortedResults.isEmpty {
@@ -2824,7 +2002,7 @@ class SearchPanelViewController: NSViewController {
         let isURLMode = isInUtilityMode && currentUtilityIdentifier == "url"
         let isBase64Mode = isInUtilityMode && currentUtilityIdentifier == "base64"
         let isIndependentViewMode =
-            isUUIDMode || isURLMode || isBase64Mode || isInMemeMode || isInFavoriteMode
+            isUUIDMode || isURLMode || isBase64Mode
 
         // 网页直达 Query 模式下，没有输入时不显示结果列表
         let isWebLinkQueryModeEmpty = isInWebLinkQueryMode && !hasQuery
@@ -2832,23 +2010,6 @@ class SearchPanelViewController: NSViewController {
         divider.isHidden = !hasQuery && !isShowingRecents && !isIndependentViewMode
         scrollView.isHidden = !hasResults || isIndependentViewMode || isWebLinkQueryModeEmpty
         noResultsLabel.isHidden = !hasQuery || hasResults || isIndependentViewMode
-
-        // 表情包或收藏模式：隐藏 scrollView，显示 memeScrollView
-        if isInMemeMode || isInFavoriteMode {
-            scrollView.isHidden = true
-            memeScrollView.isHidden = false
-
-            if isInMemeMode {
-                // 有搜索但没结果时显示提示
-                noResultsLabel.isHidden = !hasQuery || !memeResults.isEmpty
-            } else {
-                // 没有收藏时显示提示
-                noResultsLabel.isHidden = !favoriteResults.isEmpty
-            }
-        } else {
-            // 非表情包相关模式，确保 memeScrollView 隐藏
-            memeScrollView.isHidden = true
-        }
 
         // Update window height
         let isExpanded =
@@ -3002,7 +2163,7 @@ class SearchPanelViewController: NSViewController {
                 return event
             }
             if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-                || isInBookmarkMode || isIn2FAMode || isInMemeMode || isInFavoriteMode)
+                || isInBookmarkMode || isIn2FAMode)
                 && searchField.stringValue.isEmpty
             {
                 if isInIDEProjectMode {
@@ -3017,10 +2178,6 @@ class SearchPanelViewController: NSViewController {
                     exitBookmarkMode()
                 } else if isIn2FAMode {
                     exit2FAMode()
-                } else if isInMemeMode {
-                    exitMemeMode()
-                } else if isInFavoriteMode {
-                    exitFavoriteMode()
                 }
                 return nil
             }
@@ -3028,7 +2185,7 @@ class SearchPanelViewController: NSViewController {
         case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式、网页直达 Query 模式或书签模式
             if isComposing { return event }
             if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode
-                && !isInBookmarkMode && !isIn2FAMode && !isInMemeMode
+                && !isInBookmarkMode && !isIn2FAMode
             {
                 // 检查当前选中项是否有扩展功能
                 guard results.indices.contains(selectedIndex) else {
@@ -3049,17 +2206,6 @@ class SearchPanelViewController: NSViewController {
                     return nil
                 }
 
-                // 检查是否为表情包入口
-                if item.isMemeEntry {
-                    enterMemeMode()
-                    return nil
-                }
-
-                // 检查是否为收藏入口
-                if item.isFavoriteEntry {
-                    enterFavoriteMode()
-                    return nil
-                }
                 // 检查是否为 IDE（有项目列表扩展）
                 if let ideType = IDEType.detect(from: item.path) {
                     let projects = IDERecentProjectsService.shared.getRecentProjects(
@@ -3105,45 +2251,17 @@ class SearchPanelViewController: NSViewController {
             return nil
         case 125:  // Down arrow
             if isComposing { return event }  // 让输入法处理
-            if isInMemeMode {
-                moveMemeSelectionDown()
-            } else if isInFavoriteMode {
-                moveFavoriteSelectionDown()
-            } else {
-                moveSelectionDown()
-            }
+            moveSelectionDown()
             return nil
         case 126:  // Up arrow
             if isComposing { return event }  // 让输入法处理
-            if isInMemeMode {
-                moveMemeSelectionUp()
-            } else if isInFavoriteMode {
-                moveFavoriteSelectionUp()
-            } else {
-                moveSelectionUp()
-            }
+            moveSelectionUp()
             return nil
-        case 123:  // Left arrow - 表情包/收藏模式专用
+        case 123:  // Left arrow
             if isComposing { return event }
-            if isInMemeMode {
-                moveMemeSelectionLeft()
-                return nil
-            }
-            if isInFavoriteMode {
-                moveFavoriteSelectionLeft()
-                return nil
-            }
             return event
-        case 124:  // Right arrow - 表情包/收藏模式专用
+        case 124:  // Right arrow
             if isComposing { return event }
-            if isInMemeMode {
-                moveMemeSelectionRight()
-                return nil
-            }
-            if isInFavoriteMode {
-                moveFavoriteSelectionRight()
-                return nil
-            }
             return event
         case 53:  // Escape
             if isComposing { return event }  // 让输入法取消
@@ -3164,14 +2282,6 @@ class SearchPanelViewController: NSViewController {
                 exitUtilityMode()
                 return nil
             }
-            if isInMemeMode {
-                exitMemeMode()
-                return nil
-            }
-            if isInFavoriteMode {
-                exitFavoriteMode()
-                return nil
-            }
             PanelManager.shared.hidePanel()
             return nil
         case 36:  // Return
@@ -3188,14 +2298,6 @@ class SearchPanelViewController: NSViewController {
                 return nil
             }
 
-            if isInMemeMode {
-                copySelectedMeme()
-                return nil
-            }
-            if isInFavoriteMode {
-                copySelectedFavorite()
-                return nil
-            }
             openSelected()
             return nil
         default:
@@ -3211,41 +2313,15 @@ class SearchPanelViewController: NSViewController {
             // Ctrl+N / Ctrl+P / Ctrl+F / Ctrl+B
             if event.modifierFlags.contains(.control) {
                 if event.keyCode == 45 {  // N - 下
-                    if isInMemeMode {
-                        moveMemeSelectionDown()
-                        return nil
-                    } else if isInFavoriteMode {
-                        moveFavoriteSelectionDown()
-                        return nil
-                    }
                     moveSelectionDown()
                     return nil
                 } else if event.keyCode == 35 {  // P - 上
-                    if isInMemeMode {
-                        moveMemeSelectionUp()
-                        return nil
-                    } else if isInFavoriteMode {
-                        moveFavoriteSelectionUp()
-                        return nil
-                    }
                     moveSelectionUp()
                     return nil
                 } else if event.keyCode == 3 {  // F - 右
-                    if isInMemeMode {
-                        moveMemeSelectionRight()
-                        return nil
-                    } else if isInFavoriteMode {
-                        moveFavoriteSelectionRight()
-                        return nil
-                    }
+                    // 右移光标
                 } else if event.keyCode == 11 {  // B - 左
-                    if isInMemeMode {
-                        moveMemeSelectionLeft()
-                        return nil
-                    } else if isInFavoriteMode {
-                        moveFavoriteSelectionLeft()
-                        return nil
-                    }
+                    // 左移光标
                 }
             }
             // Cmd+K - 快捷操作面板
@@ -3380,7 +2456,6 @@ class SearchPanelViewController: NSViewController {
                 !isApp && !item.isWebLink && !item.isUtility && !item.isSystemCommand
                     && !item.isBookmark && !item.isBookmarkEntry && !item.is2FACode
                     && !item.is2FAEntry
-                    && !item.isMemeEntry && !item.isFavoriteEntry
             else {
                 return
             }
@@ -4040,27 +3115,6 @@ class SearchPanelViewController: NSViewController {
         if isIn2FAMode {
             isIn2FAMode = false
             twoFAResults = []
-        }
-
-        // 清理表情包模式
-        if isInMemeMode {
-            isInMemeMode = false
-            memeResults = []
-            memeSelectedRow = 0
-            memeSelectedCol = 0
-            currentMemeSearchKeyword = ""
-            memeScrollView.isHidden = true
-            memeSearchDebounceWorkItem?.cancel()
-            MemeSearchService.shared.cancelAllLoads()
-        }
-
-        // 清理收藏模式
-        if isInFavoriteMode {
-            isInFavoriteMode = false
-            favoriteResults = []
-            favoriteSelectedRow = 0
-            favoriteSelectedCol = 0
-            memeScrollView.isHidden = true
         }
 
         // 恢复 UI
@@ -5216,24 +4270,6 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             return
         }
 
-        // 表情包模式：搜索表情包（防抖处理）
-        if isInMemeMode {
-            currentMemeSearchKeyword = query  // 记录搜索关键词
-            memeSearchDebounceWorkItem?.cancel()
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.performMemeSearch(query)
-            }
-            memeSearchDebounceWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
-            return
-        }
-
-        // 收藏模式：搜索收藏的表情包
-        if isInFavoriteMode {
-            performFavoriteSearch(query)
-            return
-        }
-
         // 普通模式：搜索应用和文件
         performSearch(query)
 
@@ -5838,347 +4874,6 @@ class ResultCellView: NSView {
         nameLabelTrailingToArrow.isActive = false
         nameLabelTrailingToStats.isActive = false
         nameLabelTrailingToEdge.isActive = true
-    }
-}
-
-// MARK: - Meme Collection View Item
-
-class MemeCollectionViewItem: NSCollectionViewItem {
-    private let memeImageView = NSImageView()
-    private let gifBadge = NSTextField(labelWithString: "GIF")
-    private var currentImageURL: String?
-    private var isLoading = false
-
-    override func loadView() {
-        self.view = NSView()
-        self.view.wantsLayer = true
-        self.view.layer?.cornerRadius = 8
-        self.view.layer?.masksToBounds = true
-        self.view.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.1).cgColor
-
-        setupViews()
-    }
-
-    private func setupViews() {
-        // 图片视图
-        memeImageView.imageScaling = .scaleProportionallyUpOrDown
-        memeImageView.animates = false  // 禁用 GIF 动画以节省 CPU
-        memeImageView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(memeImageView)
-
-        // GIF 标签
-        gifBadge.font = .systemFont(ofSize: 10, weight: .bold)
-        gifBadge.textColor = .white
-        gifBadge.backgroundColor = NSColor.systemPurple
-        gifBadge.wantsLayer = true
-        gifBadge.layer?.cornerRadius = 4
-        gifBadge.layer?.masksToBounds = true
-        gifBadge.alignment = .center
-        gifBadge.translatesAutoresizingMaskIntoConstraints = false
-        gifBadge.isHidden = true
-        view.addSubview(gifBadge)
-
-        NSLayoutConstraint.activate([
-            memeImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
-            memeImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-            memeImageView.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
-            memeImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
-
-            gifBadge.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
-            gifBadge.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            gifBadge.widthAnchor.constraint(equalToConstant: 28),
-            gifBadge.heightAnchor.constraint(equalToConstant: 16),
-        ])
-    }
-
-    func configure(with meme: MemeItem) {
-        currentImageURL = meme.imageURL
-        gifBadge.isHidden = !meme.isGif
-        memeImageView.image = nil
-        isLoading = true
-
-        // 加载图片
-        MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, _ in
-            DispatchQueue.main.async {
-                guard let self = self, self.currentImageURL == meme.imageURL else { return }
-                self.isLoading = false
-                self.memeImageView.image = image
-            }
-        }
-    }
-
-    func configureWithFavorite(_ favorite: MemeFavoriteItem) {
-        currentImageURL = favorite.imageFileName
-        gifBadge.isHidden = !favorite.isGif
-        memeImageView.image = nil
-        isLoading = true
-
-        // 从本地加载图片
-        MemeFavoriteService.shared.loadFavoriteImage(favorite: favorite) { [weak self] image, _ in
-            DispatchQueue.main.async {
-                guard let self = self, self.currentImageURL == favorite.imageFileName else {
-                    return
-                }
-                self.isLoading = false
-                self.memeImageView.image = image
-            }
-        }
-    }
-
-    override var isSelected: Bool {
-        didSet {
-            if isSelected {
-                view.layer?.borderWidth = 3
-                view.layer?.borderColor = NSColor.controlAccentColor.cgColor
-            } else {
-                view.layer?.borderWidth = 0
-                view.layer?.borderColor = nil
-            }
-        }
-    }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        // 取消当前 URL 的加载请求
-        if let url = currentImageURL {
-            MemeSearchService.shared.cancelLoad(url: url)
-        }
-        currentImageURL = nil
-        memeImageView.image = nil
-        gifBadge.isHidden = true
-        isLoading = false
-        view.layer?.borderWidth = 0
-    }
-}
-
-// MARK: - NSCollectionViewDataSource & Delegate for Meme
-
-extension SearchPanelViewController: NSCollectionViewDataSource, NSCollectionViewDelegate {
-    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int)
-        -> Int
-    {
-        if isInFavoriteMode {
-            return favoriteResults.count
-        }
-        return memeResults.count
-    }
-
-    func collectionView(
-        _ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath
-    ) -> NSCollectionViewItem {
-        let item =
-            collectionView.makeItem(
-                withIdentifier: NSUserInterfaceItemIdentifier("MemeCell"),
-                for: indexPath
-            ) as! MemeCollectionViewItem
-
-        if isInFavoriteMode {
-            if indexPath.item < favoriteResults.count {
-                item.configureWithFavorite(favoriteResults[indexPath.item])
-            }
-        } else {
-            if indexPath.item < memeResults.count {
-                item.configure(with: memeResults[indexPath.item])
-            }
-        }
-
-        return item
-    }
-
-    func collectionView(
-        _ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>
-    ) {
-        guard let indexPath = indexPaths.first else { return }
-        if isInFavoriteMode {
-            favoriteSelectedRow = indexPath.item / memeColumnCount
-            favoriteSelectedCol = indexPath.item % memeColumnCount
-        } else {
-            memeSelectedRow = indexPath.item / memeColumnCount
-            memeSelectedCol = indexPath.item % memeColumnCount
-        }
-    }
-
-    func collectionView(
-        _ collectionView: NSCollectionView, didDoubleClickOnItemAt indexPath: IndexPath
-    ) {
-        if isInFavoriteMode {
-            favoriteSelectedRow = indexPath.item / memeColumnCount
-            favoriteSelectedCol = indexPath.item % memeColumnCount
-            copySelectedFavorite()
-        } else {
-            memeSelectedRow = indexPath.item / memeColumnCount
-            memeSelectedCol = indexPath.item % memeColumnCount
-            copySelectedMeme()
-        }
-    }
-}
-
-// MARK: - NSMenuDelegate for Meme Context Menu
-
-extension SearchPanelViewController: NSMenuDelegate {
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.removeAllItems()
-
-        // 获取右键点击的位置对应的 item
-        guard let clickedIndex = getClickedMemeIndex() else { return }
-
-        if isInFavoriteMode {
-            // 收藏模式：显示删除选项
-            guard clickedIndex < favoriteResults.count else { return }
-            let favorite = favoriteResults[clickedIndex]
-
-            let deleteItem = NSMenuItem(
-                title: "从收藏中删除",
-                action: #selector(deleteFavoriteFromMenu(_:)),
-                keyEquivalent: ""
-            )
-            deleteItem.representedObject = favorite
-            deleteItem.target = self
-            menu.addItem(deleteItem)
-
-            menu.addItem(NSMenuItem.separator())
-
-            let copyItem = NSMenuItem(
-                title: "复制到剪贴板",
-                action: #selector(copyFavoriteFromMenu(_:)),
-                keyEquivalent: ""
-            )
-            copyItem.representedObject = favorite
-            copyItem.target = self
-            menu.addItem(copyItem)
-
-        } else if isInMemeMode {
-            // 表情包搜索模式：显示添加收藏选项
-            guard clickedIndex < memeResults.count else { return }
-            let meme = memeResults[clickedIndex]
-
-            // 检查是否已经收藏
-            let isAlreadyFavorited = MemeFavoriteService.shared.isFavorited(url: meme.imageURL)
-
-            if isAlreadyFavorited {
-                let removeItem = NSMenuItem(
-                    title: "从收藏中删除",
-                    action: #selector(removeMemeFromFavorites(_:)),
-                    keyEquivalent: ""
-                )
-                removeItem.representedObject = meme
-                removeItem.target = self
-                menu.addItem(removeItem)
-            } else {
-                let addItem = NSMenuItem(
-                    title: "添加到收藏",
-                    action: #selector(addMemeToFavorites(_:)),
-                    keyEquivalent: ""
-                )
-                addItem.representedObject = meme
-                addItem.target = self
-                menu.addItem(addItem)
-            }
-
-            menu.addItem(NSMenuItem.separator())
-
-            let copyItem = NSMenuItem(
-                title: "复制到剪贴板",
-                action: #selector(copyMemeFromMenu(_:)),
-                keyEquivalent: ""
-            )
-            copyItem.representedObject = meme
-            copyItem.target = self
-            menu.addItem(copyItem)
-        }
-    }
-
-    /// 获取右键点击位置对应的 item 索引
-    private func getClickedMemeIndex() -> Int? {
-        let locationInWindow = memeCollectionView.window?.mouseLocationOutsideOfEventStream ?? .zero
-        let locationInView = memeCollectionView.convert(locationInWindow, from: nil)
-
-        if let indexPath = memeCollectionView.indexPathForItem(at: locationInView) {
-            return indexPath.item
-        }
-        return nil
-    }
-
-    // MARK: - Menu Actions
-
-    @objc private func addMemeToFavorites(_ sender: NSMenuItem) {
-        guard let meme = sender.representedObject as? MemeItem else { return }
-
-        // 下载图片并添加到收藏
-        MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, data in
-            guard let self = self, let imageData = data else { return }
-
-            DispatchQueue.main.async {
-                MemeFavoriteService.shared.addFavorite(
-                    imageData: imageData,
-                    description: meme.description,
-                    searchKeyword: self.currentMemeSearchKeyword,
-                    isGif: meme.isGif,
-                    originalURL: meme.imageURL
-                )
-                // 菜单是动态构建的，不需要刷新整个视图
-            }
-        }
-    }
-
-    @objc private func removeMemeFromFavorites(_ sender: NSMenuItem) {
-        guard let meme = sender.representedObject as? MemeItem else { return }
-
-        // 通过原始 URL 查找并删除收藏
-        if let favorite = MemeFavoriteService.shared.getFavorite(byURL: meme.imageURL) {
-            MemeFavoriteService.shared.removeFavorite(id: favorite.id)
-            // 菜单是动态构建的，不需要刷新整个视图
-        }
-    }
-
-    @objc private func copyMemeFromMenu(_ sender: NSMenuItem) {
-        guard let meme = sender.representedObject as? MemeItem else { return }
-
-        // 更新选中状态
-        if let index = memeResults.firstIndex(where: { $0.id == meme.id }) {
-            memeSelectedRow = index / memeColumnCount
-            memeSelectedCol = index % memeColumnCount
-            updateMemeSelection()
-        }
-
-        copySelectedMeme()
-    }
-
-    @objc private func deleteFavoriteFromMenu(_ sender: NSMenuItem) {
-        guard let favorite = sender.representedObject as? MemeFavoriteItem else { return }
-
-        MemeFavoriteService.shared.removeFavorite(id: favorite.id)
-
-        // 刷新收藏列表
-        favoriteResults = MemeFavoriteService.shared.getAllFavorites()
-
-        // 重置选中状态
-        if favoriteResults.isEmpty {
-            favoriteSelectedRow = 0
-            favoriteSelectedCol = 0
-        } else {
-            let currentIndex = favoriteSelectedRow * memeColumnCount + favoriteSelectedCol
-            if currentIndex >= favoriteResults.count {
-                let newIndex = favoriteResults.count - 1
-                favoriteSelectedRow = newIndex / memeColumnCount
-                favoriteSelectedCol = newIndex % memeColumnCount
-            }
-        }
-
-        reloadFavoriteCollectionView()
-    }
-
-    @objc private func copyFavoriteFromMenu(_ sender: NSMenuItem) {
-        guard let favorite = sender.representedObject as? MemeFavoriteItem else { return }
-
-        // 更新选中状态
-        if let index = favoriteResults.firstIndex(where: { $0.id == favorite.id }) {
-            favoriteSelectedRow = index / memeColumnCount
-            favoriteSelectedCol = index % memeColumnCount
-            updateFavoriteSelection()
-        }
-
-        copySelectedFavorite()
     }
 }
 

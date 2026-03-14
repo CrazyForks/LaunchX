@@ -33,40 +33,77 @@ struct BookmarkItem: Identifiable, Hashable {
 enum BookmarkSource: String, Codable, CaseIterable {
     case safari = "Safari"
     case chrome = "Chrome"
+    case brave = "Brave"
+    case arc = "Arc"
+    case edge = "Edge"
+    case vivaldi = "Vivaldi"
+    case opera = "Opera"
+    case helium = "Helium"
 
-    var icon: NSImage {
+    var bundleIdentifier: String {
+        switch self {
+        case .safari: return "com.apple.Safari"
+        case .chrome: return "com.google.Chrome"
+        case .brave: return "com.brave.Browser"
+        case .arc: return "company.thebrowser.Browser"
+        case .edge: return "com.microsoft.edgemac"
+        case .vivaldi: return "com.vivaldi.Vivaldi"
+        case .opera: return "com.operasoftware.Opera"
+        case .helium: return "net.imput.helium"
+        }
+    }
+
+    var bookmarkPath: String {
         switch self {
         case .safari:
-            // Safari 在 macOS Sonoma+ 位于不同位置
-            let possiblePaths = [
-                "/Applications/Safari.app",
-                "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app",
-            ]
-            for path in possiblePaths {
-                if FileManager.default.fileExists(atPath: path) {
-                    let appIcon = NSWorkspace.shared.icon(forFile: path)
-                    appIcon.size = NSSize(width: 16, height: 16)
-                    return appIcon
-                }
-            }
-            return NSImage(systemSymbolName: "safari", accessibilityDescription: "Safari")
-                ?? NSImage()
+            return NSHomeDirectory() + "/Library/Safari/Bookmarks.plist"
         case .chrome:
-            let chromePath = "/Applications/Google Chrome.app"
-            if FileManager.default.fileExists(atPath: chromePath) {
-                let appIcon = NSWorkspace.shared.icon(forFile: chromePath)
-                appIcon.size = NSSize(width: 16, height: 16)
-                return appIcon
-            }
-            return NSImage(systemSymbolName: "globe", accessibilityDescription: "Chrome")
-                ?? NSImage()
+            return NSHomeDirectory() + "/Library/Application Support/Google/Chrome/Default/Bookmarks"
+        case .brave:
+            return NSHomeDirectory() + "/Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks"
+        case .arc:
+            return NSHomeDirectory() + "/Library/Application Support/Arc/User Data/Default/Bookmarks"
+        case .edge:
+            return NSHomeDirectory() + "/Library/Application Support/Microsoft Edge/Default/Bookmarks"
+        case .vivaldi:
+            return NSHomeDirectory() + "/Library/Application Support/Vivaldi/Default/Bookmarks"
+        case .opera:
+            return NSHomeDirectory() + "/Library/Application Support/com.operasoftware.Opera/Bookmarks"
+        case .helium:
+            return NSHomeDirectory() + "/Library/Application Support/net.imput.helium/Default/Bookmarks"
         }
+    }
+
+    var isInstalled: Bool {
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) != nil
+    }
+
+    var icon: NSImage {
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+            let appIcon = NSWorkspace.shared.icon(forFile: appURL.path)
+            appIcon.size = NSSize(width: 16, height: 16)
+            return appIcon
+        }
+
+        // 如果找不到应用，返回默认图标
+        let symbolName: String
+        switch self {
+        case .safari: symbolName = "safari"
+        default: symbolName = "globe"
+        }
+        return NSImage(systemSymbolName: symbolName, accessibilityDescription: displayName) ?? NSImage()
     }
 
     var displayName: String {
         switch self {
         case .safari: return "Safari 浏览器"
         case .chrome: return "Google Chrome"
+        case .brave: return "Brave"
+        case .arc: return "Arc"
+        case .edge: return "Microsoft Edge"
+        case .vivaldi: return "Vivaldi"
+        case .opera: return "Opera"
+        case .helium: return "Helium"
         }
     }
 }
@@ -92,8 +129,17 @@ struct BookmarkSettings: Codable {
 
     static func load() -> BookmarkSettings {
         if let data = UserDefaults.standard.data(forKey: "bookmarkSettings"),
-            let settings = try? JSONDecoder().decode(BookmarkSettings.self, from: data)
+            var settings = try? JSONDecoder().decode(BookmarkSettings.self, from: data)
         {
+            // 验证选中的浏览器是否仍然安装
+            if !settings.openWith.isSpecialOption,
+               let browserSource = settings.openWith.browserSource,
+               !browserSource.isInstalled
+            {
+                // 浏览器已卸载，回退到默认浏览器
+                settings.openWith = .defaultBrowser
+                settings.save()  // 保存更新后的设置
+            }
             return settings
         }
         return .default
@@ -113,6 +159,12 @@ enum BookmarkOpenWith: String, Codable, CaseIterable {
     case defaultBrowser = "defaultBrowser"  // 默认浏览器
     case safari = "safari"
     case chrome = "chrome"
+    case brave = "brave"
+    case arc = "arc"
+    case edge = "edge"
+    case vivaldi = "vivaldi"
+    case opera = "opera"
+    case helium = "helium"
 
     var displayName: String {
         switch self {
@@ -120,6 +172,12 @@ enum BookmarkOpenWith: String, Codable, CaseIterable {
         case .defaultBrowser: return "默认浏览器"
         case .safari: return "Safari 浏览器"
         case .chrome: return "Google Chrome"
+        case .brave: return "Brave"
+        case .arc: return "Arc"
+        case .edge: return "Microsoft Edge"
+        case .vivaldi: return "Vivaldi"
+        case .opera: return "Opera"
+        case .helium: return "Helium"
         }
     }
 
@@ -141,6 +199,116 @@ enum BookmarkOpenWith: String, Codable, CaseIterable {
             return BookmarkSource.safari.icon
         case .chrome:
             return BookmarkSource.chrome.icon
+        case .brave:
+            return BookmarkSource.brave.icon
+        case .arc:
+            return BookmarkSource.arc.icon
+        case .edge:
+            return BookmarkSource.edge.icon
+        case .vivaldi:
+            return BookmarkSource.vivaldi.icon
+        case .opera:
+            return BookmarkSource.opera.icon
+        case .helium:
+            return BookmarkSource.helium.icon
+        }
+    }
+
+    // 获取对应的 BookmarkSource（如果是浏览器选项）
+    var browserSource: BookmarkSource? {
+        switch self {
+        case .safari: return .safari
+        case .chrome: return .chrome
+        case .brave: return .brave
+        case .arc: return .arc
+        case .edge: return .edge
+        case .vivaldi: return .vivaldi
+        case .opera: return .opera
+        case .helium: return .helium
+        case .bookmarkBrowser, .defaultBrowser: return nil
+        }
+    }
+
+    // 检查是否是特殊选项
+    var isSpecialOption: Bool {
+        return self == .bookmarkBrowser || self == .defaultBrowser
+    }
+}
+
+// MARK: - 书签打开方式选项（UI 层）
+
+enum BookmarkOpenWithOption: Hashable, Identifiable {
+    case special(BookmarkOpenWith)  // 特殊选项：书签浏览器、默认浏览器
+    case browser(BookmarkSource)    // 具体浏览器
+
+    var id: String {
+        switch self {
+        case .special(let openWith):
+            return openWith.rawValue
+        case .browser(let source):
+            return source.rawValue
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .special(let openWith):
+            return openWith.displayName
+        case .browser(let source):
+            return source.displayName
+        }
+    }
+
+    var icon: NSImage {
+        switch self {
+        case .special(let openWith):
+            return openWith.icon
+        case .browser(let source):
+            return source.icon
+        }
+    }
+
+    // 转换为 BookmarkOpenWith 用于存储
+    func toBookmarkOpenWith() -> BookmarkOpenWith {
+        switch self {
+        case .special(let openWith):
+            return openWith
+        case .browser(let source):
+            // 将 BookmarkSource 转换为对应的 BookmarkOpenWith
+            switch source {
+            case .safari: return .safari
+            case .chrome: return .chrome
+            case .brave: return .brave
+            case .arc: return .arc
+            case .edge: return .edge
+            case .vivaldi: return .vivaldi
+            case .opera: return .opera
+            case .helium: return .helium
+            }
+        }
+    }
+
+    // 从 BookmarkOpenWith 创建选项
+    static func from(_ openWith: BookmarkOpenWith) -> BookmarkOpenWithOption {
+        switch openWith {
+        case .bookmarkBrowser, .defaultBrowser:
+            return .special(openWith)
+        case .safari:
+            return .browser(.safari)
+        case .chrome:
+            return .browser(.chrome)
+        case .brave:
+            return .browser(.brave)
+        case .arc:
+            return .browser(.arc)
+        case .edge:
+            return .browser(.edge)
+        case .vivaldi:
+            return .browser(.vivaldi)
+        case .opera:
+            return .browser(.opera)
+        case .helium:
+            return .browser(.helium)
         }
     }
 }
@@ -175,8 +343,8 @@ final class BookmarkService {
             switch source {
             case .safari:
                 bookmarks.append(contentsOf: loadSafariBookmarks())
-            case .chrome:
-                bookmarks.append(contentsOf: loadChromeBookmarks())
+            case .chrome, .brave, .arc, .edge, .vivaldi, .opera, .helium:
+                bookmarks.append(contentsOf: loadChromiumBookmarks(source: source))
             }
         }
 
@@ -212,6 +380,18 @@ final class BookmarkService {
             openWithBrowser(url: url, source: .safari)
         case .chrome:
             openWithBrowser(url: url, source: .chrome)
+        case .brave:
+            openWithBrowser(url: url, source: .brave)
+        case .arc:
+            openWithBrowser(url: url, source: .arc)
+        case .edge:
+            openWithBrowser(url: url, source: .edge)
+        case .vivaldi:
+            openWithBrowser(url: url, source: .vivaldi)
+        case .opera:
+            openWithBrowser(url: url, source: .opera)
+        case .helium:
+            openWithBrowser(url: url, source: .helium)
         }
     }
 
@@ -277,18 +457,17 @@ final class BookmarkService {
         }
     }
 
-    // MARK: - Chrome 书签
+    // MARK: - Chromium 系浏览器书签
 
-    private func loadChromeBookmarks() -> [BookmarkItem] {
-        let bookmarksPath =
-            NSHomeDirectory() + "/Library/Application Support/Google/Chrome/Default/Bookmarks"
+    private func loadChromiumBookmarks(source: BookmarkSource) -> [BookmarkItem] {
+        let bookmarksPath = source.bookmarkPath
 
         guard FileManager.default.fileExists(atPath: bookmarksPath),
             let data = FileManager.default.contents(atPath: bookmarksPath),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let roots = json["roots"] as? [String: Any]
         else {
-            print("[BookmarkService] Failed to load Chrome bookmarks")
+            print("[BookmarkService] Failed to load \(source.displayName) bookmarks")
             return []
         }
 
@@ -296,19 +475,19 @@ final class BookmarkService {
 
         // 解析书签栏
         if let bookmarkBar = roots["bookmark_bar"] as? [String: Any] {
-            parseChromeBookmarkFolder(bookmarkBar, into: &bookmarks, folderPath: [])
+            parseChromiumBookmarkFolder(bookmarkBar, into: &bookmarks, source: source, folderPath: [])
         }
 
         // 解析其他书签
         if let other = roots["other"] as? [String: Any] {
-            parseChromeBookmarkFolder(other, into: &bookmarks, folderPath: [])
+            parseChromiumBookmarkFolder(other, into: &bookmarks, source: source, folderPath: [])
         }
 
         return bookmarks
     }
 
-    private func parseChromeBookmarkFolder(
-        _ dict: [String: Any], into bookmarks: inout [BookmarkItem], folderPath: [String]
+    private func parseChromiumBookmarkFolder(
+        _ dict: [String: Any], into bookmarks: inout [BookmarkItem], source: BookmarkSource, folderPath: [String]
     ) {
         guard let children = dict["children"] as? [[String: Any]] else { return }
 
@@ -323,7 +502,7 @@ final class BookmarkService {
                     let bookmark = BookmarkItem(
                         title: name,
                         url: url,
-                        source: .chrome,
+                        source: source,
                         folderPath: folderPath
                     )
                     bookmarks.append(bookmark)
@@ -335,7 +514,7 @@ final class BookmarkService {
                 if !folderName.isEmpty {
                     newPath.append(folderName)
                 }
-                parseChromeBookmarkFolder(child, into: &bookmarks, folderPath: newPath)
+                parseChromiumBookmarkFolder(child, into: &bookmarks, source: source, folderPath: newPath)
             }
         }
     }
@@ -343,17 +522,13 @@ final class BookmarkService {
     // MARK: - 辅助方法
 
     private func openWithBrowser(url: URL, source: BookmarkSource) {
-        let browserPath: String
-        switch source {
-        case .safari:
-            browserPath = "/Applications/Safari.app"
-        case .chrome:
-            browserPath = "/Applications/Google Chrome.app"
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: source.bundleIdentifier) {
+            NSWorkspace.shared.open(
+                [url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            // 如果浏览器未安装，使用默认浏览器打开
+            NSWorkspace.shared.open(url)
         }
-
-        let browserURL = URL(fileURLWithPath: browserPath)
-        NSWorkspace.shared.open(
-            [url], withApplicationAt: browserURL, configuration: NSWorkspace.OpenConfiguration())
     }
 
     /// 检查是否有完全磁盘访问权限（Safari 书签需要）
