@@ -2,8 +2,12 @@ import Carbon
 import Cocoa
 import Combine
 
+import Carbon
+import Cocoa
+import Combine
+
 // C-convention callback function for the event handler
-private func globalHotKeyHandler(
+func globalHotKeyHandler(
     nextHandler: EventHandlerCallRef?, event: EventRef?, userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
     return HotKeyService.shared.handleEvent(event)
@@ -121,8 +125,8 @@ class HotKeyService: ObservableObject {
     /// 主快捷键触发回调
     var onHotKeyPressed: (() -> Void)?
 
-    private var mainHotKeyRef: EventHotKeyRef?
-    private let mainHotKeyId: UInt32 = 1
+    var mainHotKeyRef: EventHotKeyRef?
+    let mainHotKeyId: UInt32 = 1
 
     /// 主快捷键的按键代码
     @Published var currentKeyCode: UInt32 = UInt32(kVK_Space)
@@ -138,12 +142,12 @@ class HotKeyService: ObservableObject {
     @Published var doubleTapModifier: DoubleTapModifier = .command
 
     /// 双击检测相关
-    private var lastModifierPressTime: Date?
-    private var lastPressedModifier: DoubleTapModifier?
-    private var globalFlagsMonitor: Any?
-    private var localFlagsMonitor: Any?
-    private let doubleTapInterval: TimeInterval = 0.3  // 双击间隔阈值
-    private var previousFlags: NSEvent.ModifierFlags = []
+    var lastModifierPressTime: Date?
+    var lastPressedModifier: DoubleTapModifier?
+    var globalFlagsMonitor: Any?
+    var localFlagsMonitor: Any?
+    let doubleTapInterval: TimeInterval = 0.3  // 双击间隔阈值
+    var previousFlags: NSEvent.ModifierFlags = []
 
     // MARK: - 自定义快捷键
 
@@ -151,29 +155,29 @@ class HotKeyService: ObservableObject {
     var onCustomHotKeyPressed: ((UUID, Bool) -> Void)?
 
     /// 自定义快捷键引用: hotKeyId -> EventHotKeyRef
-    private var customHotKeyRefs: [UInt32: EventHotKeyRef] = [:]
+    var customHotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     /// 自定义快捷键动作: hotKeyId -> (itemId, isExtension)
-    private var customHotKeyActions: [UInt32: (UUID, Bool)] = [:]
+    var customHotKeyActions: [UInt32: (UUID, Bool)] = [:]
     /// 快捷键配置缓存: hotKeyId -> HotKeyConfig（用于冲突检测）
-    private var customHotKeyConfigs: [UInt32: HotKeyConfig] = [:]
+    var customHotKeyConfigs: [UInt32: HotKeyConfig] = [:]
     /// 下一个可用的快捷键 ID（从 100 开始，避免与主快捷键冲突）
-    private var nextCustomHotKeyId: UInt32 = 100
+    var nextCustomHotKeyId: UInt32 = 100
 
     // MARK: - 书签扩展快捷键
 
     /// 书签快捷键触发回调
     var onBookmarkHotKeyPressed: (() -> Void)?
     /// 书签快捷键引用
-    private var bookmarkHotKeyRef: EventHotKeyRef?
+    var bookmarkHotKeyRef: EventHotKeyRef?
     /// 书签快捷键 ID
-    private let bookmarkHotKeyId: UInt32 = 2
+    let bookmarkHotKeyId: UInt32 = 2
 
     /// 2FA 快捷键触发回调
     var on2FAHotKeyPressed: (() -> Void)?
     /// 2FA 快捷键引用
-    private var twoFAHotKeyRef: EventHotKeyRef?
+    var twoFAHotKeyRef: EventHotKeyRef?
     /// 2FA 快捷键 ID
-    private let twoFAHotKeyId: UInt32 = 3
+    let twoFAHotKeyId: UInt32 = 3
 
     // MARK: - 剪贴板扩展快捷键
 
@@ -182,13 +186,13 @@ class HotKeyService: ObservableObject {
     /// 纯文本粘贴快捷键触发回调
     var onPlainTextPasteHotKeyPressed: (() -> Void)?
     /// 剪贴板快捷键引用
-    private var clipboardHotKeyRef: EventHotKeyRef?
+    var clipboardHotKeyRef: EventHotKeyRef?
     /// 纯文本粘贴快捷键引用
-    private var plainTextPasteHotKeyRef: EventHotKeyRef?
+    var plainTextPasteHotKeyRef: EventHotKeyRef?
     /// 剪贴板快捷键 ID
-    private let clipboardHotKeyId: UInt32 = 4
+    let clipboardHotKeyId: UInt32 = 4
     /// 纯文本粘贴快捷键 ID
-    private let plainTextPasteHotKeyId: UInt32 = 5
+    let plainTextPasteHotKeyId: UInt32 = 5
 
     // MARK: - AI 翻译快捷键
 
@@ -197,21 +201,21 @@ class HotKeyService: ObservableObject {
     /// 输入翻译快捷键触发回调
     var onTranslateInputHotKeyPressed: (() -> Void)?
     /// 选词翻译快捷键引用
-    private var translateSelectionHotKeyRef: EventHotKeyRef?
+    var translateSelectionHotKeyRef: EventHotKeyRef?
     /// 输入翻译快捷键引用
-    private var translateInputHotKeyRef: EventHotKeyRef?
+    var translateInputHotKeyRef: EventHotKeyRef?
     /// 选词翻译快捷键 ID
-    private let translateSelectionHotKeyId: UInt32 = 6
+    let translateSelectionHotKeyId: UInt32 = 6
     /// 输入翻译快捷键 ID
-    private let translateInputHotKeyId: UInt32 = 7
+    let translateInputHotKeyId: UInt32 = 7
 
     // MARK: - 私有属性
 
-    private let hotKeySignature: OSType
-    private var eventHandlerRef: EventHandlerRef?
+    let hotKeySignature: OSType
+    var eventHandlerRef: EventHandlerRef?
 
     /// 是否处于录制模式（暂停状态）
-    private(set) var isSuspended: Bool = false
+    var isSuspended: Bool = false
 
     // MARK: - 初始化
 
@@ -230,7 +234,7 @@ class HotKeyService: ObservableObject {
             name: NSNotification.Name("AppConfigDidImport"), object: nil)
     }
 
-    @objc private func handleConfigImport() {
+    @objc func handleConfigImport() {
         print("HotKeyService: Config imported, reloading all hotkeys")
         DispatchQueue.main.async {
             // 1. 重新加载主快捷键
@@ -253,896 +257,10 @@ class HotKeyService: ObservableObject {
         }
     }
 
-    // MARK: - 主快捷键方法
-
-    func setupGlobalHotKey() {
-        // Install event handler only once
-        guard eventHandlerRef == nil else { return }
-
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
-
-        let status = InstallEventHandler(
-            GetApplicationEventTarget(),
-            globalHotKeyHandler,
-            1,
-            &eventType,
-            nil,
-            &eventHandlerRef
-        )
-
-        if status != noErr {
-            print("HotKeyService: Failed to install event handler. Status: \(status)")
-            return
-        }
-
-        // Load saved configuration
-        loadHotKeySettings()
-    }
-
-    /// 加载保存的快捷键设置
-    private func loadHotKeySettings() {
-        // 检查是否使用双击修饰键模式
-        let savedUseDoubleTap = UserDefaults.standard.bool(forKey: "hotKeyUseDoubleTap")
-
-        if savedUseDoubleTap {
-            // 加载双击修饰键设置
-            if let savedModifier = UserDefaults.standard.string(forKey: "hotKeyDoubleTapModifier"),
-                let modifier = DoubleTapModifier(rawValue: savedModifier)
-            {
-                enableDoubleTapModifier(modifier)
-            } else {
-                enableDoubleTapModifier(.command)
-            }
-        } else {
-            // 加载传统快捷键设置
-            let savedKeyCode = UserDefaults.standard.object(forKey: "hotKeyKeyCode") as? Int
-            let savedModifiers = UserDefaults.standard.object(forKey: "hotKeyModifiers") as? Int
-
-            if let key = savedKeyCode, let mods = savedModifiers {
-                registerMainHotKey(keyCode: UInt32(key), modifiers: UInt32(mods))
-            } else {
-                registerMainHotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
-            }
-        }
-    }
-
-    /// 注册主快捷键（打开搜索面板）
-    func registerMainHotKey(keyCode: UInt32, modifiers: UInt32) {
-        // 先禁用双击修饰键模式
-        disableDoubleTapModifier()
-
-        // Unregister existing if any
-        if let ref = mainHotKeyRef {
-            UnregisterEventHotKey(ref)
-            mainHotKeyRef = nil
-        }
-
-        self.currentKeyCode = keyCode
-        self.currentModifiers = modifiers
-        self.useDoubleTapModifier = false
-
-        // Save persistence
-        UserDefaults.standard.set(Int(keyCode), forKey: "hotKeyKeyCode")
-        UserDefaults.standard.set(Int(modifiers), forKey: "hotKeyModifiers")
-        UserDefaults.standard.set(false, forKey: "hotKeyUseDoubleTap")
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: mainHotKeyId)
-
-        let registerStatus = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &mainHotKeyRef
-        )
-
-        if registerStatus != noErr {
-            print("HotKeyService: Failed to register main hotkey. Status: \(registerStatus)")
-        } else {
-            print("HotKeyService: Registered Main HotKey (Code: \(keyCode), Mods: \(modifiers))")
-        }
-    }
-
-    /// 兼容旧的方法名
-    func registerHotKey(keyCode: UInt32, modifiers: UInt32) {
-        registerMainHotKey(keyCode: keyCode, modifiers: modifiers)
-    }
-
-    /// 清除主快捷键
-    func clearHotKey() {
-        // 清除传统快捷键
-        if let ref = mainHotKeyRef {
-            UnregisterEventHotKey(ref)
-            mainHotKeyRef = nil
-        }
-
-        // 清除双击修饰键监听
-        disableDoubleTapModifier()
-
-        currentKeyCode = 0
-        currentModifiers = 0
-        useDoubleTapModifier = false
-
-        UserDefaults.standard.removeObject(forKey: "hotKeyKeyCode")
-        UserDefaults.standard.removeObject(forKey: "hotKeyModifiers")
-        UserDefaults.standard.removeObject(forKey: "hotKeyUseDoubleTap")
-        UserDefaults.standard.removeObject(forKey: "hotKeyDoubleTapModifier")
-        print("HotKeyService: Cleared Main HotKey")
-    }
-
-    // MARK: - 双击修饰键方法
-
-    /// 启用双击修饰键模式
-    func enableDoubleTapModifier(_ modifier: DoubleTapModifier) {
-        // 先清除传统快捷键
-        if let ref = mainHotKeyRef {
-            UnregisterEventHotKey(ref)
-            mainHotKeyRef = nil
-        }
-
-        self.useDoubleTapModifier = true
-        self.doubleTapModifier = modifier
-        self.currentKeyCode = 0
-        self.currentModifiers = 0
-
-        // 保存设置
-        UserDefaults.standard.set(true, forKey: "hotKeyUseDoubleTap")
-        UserDefaults.standard.set(modifier.rawValue, forKey: "hotKeyDoubleTapModifier")
-
-        // 启动监听
-        startDoubleTapMonitoring()
-
-        print("HotKeyService: Enabled Double-Tap \(modifier.displayName) mode")
-    }
-
-    /// 禁用双击修饰键模式
-    private func disableDoubleTapModifier() {
-        stopDoubleTapMonitoring()
-        lastModifierPressTime = nil
-        lastPressedModifier = nil
-        previousFlags = []
-    }
-
-    /// 开始监听双击修饰键
-    private func startDoubleTapMonitoring() {
-        stopDoubleTapMonitoring()
-
-        // 全局监听（其他应用激活时）
-        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) {
-            [weak self] event in
-            self?.handleFlagsChanged(event)
-        }
-
-        // 本地监听（本应用激活时）
-        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) {
-            [weak self] event in
-            self?.handleFlagsChanged(event)
-            return event
-        }
-    }
-
-    /// 停止监听双击修饰键
-    private func stopDoubleTapMonitoring() {
-        if let monitor = globalFlagsMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalFlagsMonitor = nil
-        }
-        if let monitor = localFlagsMonitor {
-            NSEvent.removeMonitor(monitor)
-            localFlagsMonitor = nil
-        }
-    }
-
-    /// 处理修饰键变化事件
-    private func handleFlagsChanged(_ event: NSEvent) {
-        let currentFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let targetFlag = doubleTapModifier.flag
-
-        // 检测目标修饰键是否刚被按下（从无到有）
-        let wasPressed = !previousFlags.contains(targetFlag) && currentFlags.contains(targetFlag)
-        // 检测目标修饰键是否刚被释放（从有到无）
-        let wasReleased = previousFlags.contains(targetFlag) && !currentFlags.contains(targetFlag)
-
-        // 确保只有目标修饰键被按下，没有其他修饰键
-        let onlyTargetPressed =
-            currentFlags.subtracting([.capsLock, .numericPad, .function]) == targetFlag
-
-        if wasPressed && onlyTargetPressed {
-            let now = Date()
-
-            if let lastTime = lastModifierPressTime,
-                let lastModifier = lastPressedModifier,
-                lastModifier == doubleTapModifier,
-                now.timeIntervalSince(lastTime) < doubleTapInterval
-            {
-                // 双击检测成功
-                lastModifierPressTime = nil
-                lastPressedModifier = nil
-
-                DispatchQueue.main.async { [weak self] in
-                    self?.onHotKeyPressed?()
-                }
-            } else {
-                // 记录第一次按下
-                lastModifierPressTime = now
-                lastPressedModifier = doubleTapModifier
-            }
-        } else if wasReleased {
-            // 释放时不做特殊处理，保留上次按下时间用于双击检测
-        } else if !currentFlags.intersection([.command, .option, .control, .shift]).isEmpty
-            && currentFlags.intersection([.command, .option, .control, .shift]) != targetFlag
-        {
-            // 如果按下了其他修饰键，重置状态
-            lastModifierPressTime = nil
-            lastPressedModifier = nil
-        }
-
-        previousFlags = currentFlags
-    }
-
-    /// 获取当前快捷键的显示字符串
-    var currentHotKeyDisplayString: String {
-        if useDoubleTapModifier {
-            return "\(doubleTapModifier.symbol) \(doubleTapModifier.symbol)"
-        } else if currentKeyCode != 0 {
-            return HotKeyService.displayString(for: currentModifiers, keyCode: currentKeyCode)
-        } else {
-            return ""
-        }
-    }
-
-    // MARK: - 自定义快捷键方法
-
-    /// 注册自定义快捷键
-    /// - Parameters:
-    ///   - keyCode: 按键代码
-    ///   - modifiers: 修饰键
-    ///   - itemId: 关联的项目 ID
-    ///   - isExtension: 是否为"进入扩展"快捷键
-    /// - Returns: 快捷键 ID，失败返回 nil
-    @discardableResult
-    func registerCustomHotKey(
-        keyCode: UInt32, modifiers: UInt32, itemId: UUID, isExtension: Bool
-    ) -> UInt32? {
-        let hotKeyId = nextCustomHotKeyId
-        nextCustomHotKeyId += 1
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: hotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status != noErr {
-            print(
-                "HotKeyService: Failed to register custom hotkey. Status: \(status), KeyCode: \(keyCode), Mods: \(modifiers)"
-            )
-            return nil
-        }
-
-        customHotKeyRefs[hotKeyId] = hotKeyRef
-        customHotKeyActions[hotKeyId] = (itemId, isExtension)
-        customHotKeyConfigs[hotKeyId] = HotKeyConfig(keyCode: keyCode, modifiers: modifiers)
-
-        print(
-            "HotKeyService: Registered Custom HotKey (ID: \(hotKeyId), Code: \(keyCode), Mods: \(modifiers), Item: \(itemId), IsExt: \(isExtension))"
-        )
-
-        return hotKeyId
-    }
-
-    /// 注销自定义快捷键
-    func unregisterCustomHotKey(hotKeyId: UInt32) {
-        guard let ref = customHotKeyRefs[hotKeyId] else { return }
-
-        UnregisterEventHotKey(ref)
-        customHotKeyRefs.removeValue(forKey: hotKeyId)
-        customHotKeyActions.removeValue(forKey: hotKeyId)
-        customHotKeyConfigs.removeValue(forKey: hotKeyId)
-
-        print("HotKeyService: Unregistered Custom HotKey (ID: \(hotKeyId))")
-    }
-
-    /// 注销所有自定义快捷键
-    func unregisterAllCustomHotKeys() {
-        for (hotKeyId, ref) in customHotKeyRefs {
-            UnregisterEventHotKey(ref)
-            print("HotKeyService: Unregistered Custom HotKey (ID: \(hotKeyId))")
-        }
-        customHotKeyRefs.removeAll()
-        customHotKeyActions.removeAll()
-        customHotKeyConfigs.removeAll()
-    }
-
-    // MARK: - 书签快捷键
-
-    /// 注册书签扩展快捷键
-    func registerBookmarkHotKey(keyCode: UInt32, modifiers: UInt32) {
-        // 先注销旧的
-        unregisterBookmarkHotKey()
-
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: bookmarkHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            bookmarkHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered Bookmark HotKey (Code: \(keyCode), Mods: \(modifiers))")
-        } else {
-            print("HotKeyService: Failed to register bookmark hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销书签扩展快捷键
-    func unregisterBookmarkHotKey() {
-        if let ref = bookmarkHotKeyRef {
-            UnregisterEventHotKey(ref)
-            bookmarkHotKeyRef = nil
-            print("HotKeyService: Unregistered Bookmark HotKey")
-        }
-    }
-
-    /// 加载书签快捷键设置
-    func loadBookmarkHotKey() {
-        let settings = BookmarkSettings.load()
-        if settings.hotKeyCode != 0 {
-            registerBookmarkHotKey(
-                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
-        }
-    }
-
-    // MARK: - 2FA 快捷键
-
-    /// 注册 2FA 扩展快捷键
-    func register2FAHotKey(keyCode: UInt32, modifiers: UInt32) {
-        // 先注销旧的
-        unregister2FAHotKey()
-
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: twoFAHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            twoFAHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered 2FA HotKey (Code: \(keyCode), Mods: \(modifiers))")
-        } else {
-            print("HotKeyService: Failed to register 2FA hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销 2FA 扩展快捷键
-    func unregister2FAHotKey() {
-        if let ref = twoFAHotKeyRef {
-            UnregisterEventHotKey(ref)
-            twoFAHotKeyRef = nil
-            print("HotKeyService: Unregistered 2FA HotKey")
-        }
-    }
-
-    /// 加载 2FA 快捷键设置
-    func load2FAHotKey() {
-        let settings = TwoFactorAuthSettings.load()
-        if settings.hotKeyCode != 0 {
-            register2FAHotKey(
-                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
-        }
-    }
-
-    // MARK: - 剪贴板快捷键
-
-    /// 注册剪贴板快捷键
-    func registerClipboardHotKey(keyCode: UInt32, modifiers: UInt32) {
-        unregisterClipboardHotKey()
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: clipboardHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            clipboardHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered Clipboard HotKey (Code: \(keyCode), Mods: \(modifiers))")
-        } else {
-            print("HotKeyService: Failed to register clipboard hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销剪贴板快捷键
-    func unregisterClipboardHotKey() {
-        if let ref = clipboardHotKeyRef {
-            UnregisterEventHotKey(ref)
-            clipboardHotKeyRef = nil
-            print("HotKeyService: Unregistered Clipboard HotKey")
-        }
-    }
-
-    /// 加载剪贴板快捷键设置
-    func loadClipboardHotKey() {
-        let settings = ClipboardSettings.load()
-        if settings.hotKeyCode != 0 {
-            registerClipboardHotKey(
-                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
-        }
-    }
-
-    /// 注册纯文本粘贴快捷键
-    func registerPlainTextPasteHotKey(keyCode: UInt32, modifiers: UInt32) {
-        unregisterPlainTextPasteHotKey()
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: plainTextPasteHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            plainTextPasteHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered PlainTextPaste HotKey (Code: \(keyCode), Mods: \(modifiers))"
-            )
-        } else {
-            print("HotKeyService: Failed to register plainTextPaste hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销纯文本粘贴快捷键
-    func unregisterPlainTextPasteHotKey() {
-        if let ref = plainTextPasteHotKeyRef {
-            UnregisterEventHotKey(ref)
-            plainTextPasteHotKeyRef = nil
-            print("HotKeyService: Unregistered PlainTextPaste HotKey")
-        }
-    }
-
-    /// 加载纯文本粘贴快捷键设置
-    func loadPlainTextPasteHotKey() {
-        let settings = ClipboardSettings.load()
-        if settings.plainTextHotKeyCode != 0 {
-            registerPlainTextPasteHotKey(
-                keyCode: settings.plainTextHotKeyCode, modifiers: settings.plainTextHotKeyModifiers)
-        }
-    }
-
-    // MARK: - AI 翻译快捷键方法
-
-    /// 注册选词翻译快捷键
-    func registerTranslateSelectionHotKey(keyCode: UInt32, modifiers: UInt32) {
-        unregisterTranslateSelectionHotKey()
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: translateSelectionHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            translateSelectionHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered TranslateSelection HotKey (Code: \(keyCode), Mods: \(modifiers))"
-            )
-        } else {
-            print("HotKeyService: Failed to register translateSelection hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销选词翻译快捷键
-    func unregisterTranslateSelectionHotKey() {
-        if let ref = translateSelectionHotKeyRef {
-            UnregisterEventHotKey(ref)
-            translateSelectionHotKeyRef = nil
-            print("HotKeyService: Unregistered TranslateSelection HotKey")
-        }
-    }
-
-    /// 注册输入翻译快捷键
-    func registerTranslateInputHotKey(keyCode: UInt32, modifiers: UInt32) {
-        unregisterTranslateInputHotKey()
-        guard keyCode != 0 else { return }
-
-        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: translateInputHotKeyId)
-        var hotKeyRef: EventHotKeyRef?
-
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            translateInputHotKeyRef = hotKeyRef
-            print(
-                "HotKeyService: Registered TranslateInput HotKey (Code: \(keyCode), Mods: \(modifiers))"
-            )
-        } else {
-            print("HotKeyService: Failed to register translateInput hotkey. Status: \(status)")
-        }
-    }
-
-    /// 注销输入翻译快捷键
-    func unregisterTranslateInputHotKey() {
-        if let ref = translateInputHotKeyRef {
-            UnregisterEventHotKey(ref)
-            translateInputHotKeyRef = nil
-            print("HotKeyService: Unregistered TranslateInput HotKey")
-        }
-    }
-
-    /// 加载翻译快捷键设置
-    func loadTranslateHotKeys() {
-        let settings = AITranslateSettings.load()
-        if settings.selectionHotKeyCode != 0 {
-            registerTranslateSelectionHotKey(
-                keyCode: settings.selectionHotKeyCode, modifiers: settings.selectionHotKeyModifiers)
-        }
-        if settings.inputHotKeyCode != 0 {
-            registerTranslateInputHotKey(
-                keyCode: settings.inputHotKeyCode, modifiers: settings.inputHotKeyModifiers)
-        }
-    }
-
-    // MARK: - 暂停/恢复快捷键（用于录制时）
-
-    /// 暂停所有快捷键（录制时使用）
-    func suspendAllHotKeys() {
-        isSuspended = true
-
-        // 暂停主快捷键
-        if let ref = mainHotKeyRef {
-            UnregisterEventHotKey(ref)
-            mainHotKeyRef = nil
-            print("HotKeyService: Suspended main hotkey")
-        }
-
-        // 暂停双击修饰键监听
-        stopDoubleTapMonitoring()
-
-        // 暂停所有自定义快捷键
-        for (hotKeyId, ref) in customHotKeyRefs {
-            UnregisterEventHotKey(ref)
-            print("HotKeyService: Suspended custom hotkey (ID: \(hotKeyId))")
-        }
-        // 注意：不清除 customHotKeyActions 和 customHotKeyConfigs，以便恢复时使用
-        customHotKeyRefs.removeAll()
-
-        print("HotKeyService: All hotkeys suspended")
-    }
-
-    /// 恢复所有快捷键
-    func resumeAllHotKeys() {
-        isSuspended = false
-        // 恢复主快捷键或双击修饰键
-        if useDoubleTapModifier {
-            startDoubleTapMonitoring()
-            print("HotKeyService: Resumed double-tap modifier")
-        } else if currentKeyCode != 0 && currentModifiers != 0 {
-            // 使用 registerMainHotKey 方法来确保正确处理旧引用
-            registerMainHotKey(keyCode: currentKeyCode, modifiers: currentModifiers)
-            print("HotKeyService: Resumed main hotkey")
-        }
-
-        // 优先使用新的 ToolsConfig，如果没有数据则回退到 CustomItemsConfig
-        let toolsConfig = ToolsConfig.load()
-        if !toolsConfig.tools.isEmpty {
-            reloadToolHotKeys(from: toolsConfig)
-        } else {
-            let config = CustomItemsConfig.load()
-            reloadCustomHotKeys(from: config)
-        }
-
-        print("HotKeyService: All hotkeys resumed")
-    }
-
-    /// 从配置重新加载所有自定义快捷键（旧版本，兼容 CustomItemsConfig）
-    func reloadCustomHotKeys(from config: CustomItemsConfig) {
-        // 如果处于暂停状态（录制模式），不重新加载快捷键
-        guard !isSuspended else {
-            print("HotKeyService: Skipping reload - currently suspended")
-            return
-        }
-
-        // 先注销所有现有的自定义快捷键
-        unregisterAllCustomHotKeys()
-
-        // 重新注册
-        for item in config.customItems {
-            if let openKey = item.openHotKey {
-                registerCustomHotKey(
-                    keyCode: openKey.keyCode,
-                    modifiers: openKey.modifiers,
-                    itemId: item.id,
-                    isExtension: false
-                )
-            }
-            if let extKey = item.extensionHotKey {
-                registerCustomHotKey(
-                    keyCode: extKey.keyCode,
-                    modifiers: extKey.modifiers,
-                    itemId: item.id,
-                    isExtension: true
-                )
-            }
-        }
-
-        print(
-            "HotKeyService: Reloaded \(customHotKeyRefs.count) custom hotkeys from CustomItemsConfig"
-        )
-    }
-
-    /// 从 ToolsConfig 重新加载所有工具快捷键
-    func reloadToolHotKeys(from config: ToolsConfig) {
-        // 如果处于暂停状态（录制模式），不重新加载快捷键
-        guard !isSuspended else {
-            print("HotKeyService: Skipping reload - currently suspended")
-            return
-        }
-
-        // 先注销所有现有的自定义快捷键
-        unregisterAllCustomHotKeys()
-
-        // 只为已启用的工具注册快捷键
-        for tool in config.enabledTools {
-            // 注册主快捷键
-            if let hotKey = tool.hotKey {
-                registerCustomHotKey(
-                    keyCode: hotKey.keyCode,
-                    modifiers: hotKey.modifiers,
-                    itemId: tool.id,
-                    isExtension: false
-                )
-            }
-
-            // 注册扩展快捷键（IDE、网页直达 Query、实用工具）
-            // ⚠️ 重要：修改快捷键相关功能时，必须确保所有支持扩展的工具类型都被注册！
-            if tool.supportsExtension, let extKey = tool.extensionHotKey {
-                registerCustomHotKey(
-                    keyCode: extKey.keyCode,
-                    modifiers: extKey.modifiers,
-                    itemId: tool.id,
-                    isExtension: true
-                )
-            }
-        }
-
-        print("HotKeyService: Reloaded \(customHotKeyRefs.count) tool hotkeys from ToolsConfig")
-    }
-
-    // MARK: - 冲突检测
-
-    /// 检查快捷键是否冲突
-    /// - Parameters:
-    ///   - keyCode: 按键代码
-    ///   - modifiers: 修饰键
-    ///   - excludingItemId: 排除的项目 ID（用于编辑时排除自身）
-    ///   - excludingIsExtension: 排除的快捷键类型
-    ///   - excludingMainHotKey: 是否排除主快捷键检测
-    /// - Returns: 冲突的描述，nil 表示无冲突
-    func checkConflict(
-        keyCode: UInt32, modifiers: UInt32, excludingItemId: UUID? = nil,
-        excludingIsExtension: Bool? = nil, excludingMainHotKey: Bool = false
-    ) -> String? {
-        // 检查与主快捷键的冲突（除非排除）
-        if !excludingMainHotKey && keyCode == currentKeyCode && modifiers == currentModifiers
-            && !useDoubleTapModifier
-        {
-            return "启动快捷键"
-        }
-
-        // 直接从 ToolsConfig 读取所有已配置的快捷键进行冲突检测
-        let toolsConfig = ToolsConfig.load()
-        for tool in toolsConfig.tools {
-            // 检查主快捷键
-            if let hotKey = tool.hotKey,
-                hotKey.keyCode == keyCode && hotKey.modifiers == modifiers
-            {
-                // 如果是同一个项目的同类型快捷键，跳过
-                if let excludeId = excludingItemId,
-                    let excludeIsExt = excludingIsExtension,
-                    tool.id == excludeId && !excludeIsExt
-                {
-                    continue
-                }
-                return tool.name + " (打开)"
-            }
-
-            // 检查扩展快捷键（IDE、网页直达 Query、实用工具）
-            // ⚠️ 重要：修改快捷键相关功能时，必须确保所有支持扩展的工具类型都被检测！
-            if tool.supportsExtension, let extKey = tool.extensionHotKey,
-                extKey.keyCode == keyCode && extKey.modifiers == modifiers
-            {
-                // 如果是同一个项目的同类型快捷键，跳过
-                if let excludeId = excludingItemId,
-                    let excludeIsExt = excludingIsExtension,
-                    tool.id == excludeId && excludeIsExt
-                {
-                    continue
-                }
-                return tool.name + " (进入扩展)"
-            }
-        }
-
-        // 回退检查 CustomItemsConfig（兼容旧数据）
-        let itemsConfig = CustomItemsConfig.load()
-        for item in itemsConfig.customItems {
-            // 检查打开快捷键
-            if let openKey = item.openHotKey,
-                openKey.keyCode == keyCode && openKey.modifiers == modifiers
-            {
-                if let excludeId = excludingItemId,
-                    let excludeIsExt = excludingIsExtension,
-                    item.id == excludeId && !excludeIsExt
-                {
-                    continue
-                }
-                return item.name + " (打开)"
-            }
-
-            // 检查扩展快捷键
-            if let extKey = item.extensionHotKey,
-                extKey.keyCode == keyCode && extKey.modifiers == modifiers
-            {
-                if let excludeId = excludingItemId,
-                    let excludeIsExt = excludingIsExtension,
-                    item.id == excludeId && excludeIsExt
-                {
-                    continue
-                }
-                return item.name + " (进入扩展)"
-            }
-        }
-
-        return nil
-    }
-
-    /// 检查快捷键冲突（用于高级扩展设置）
-    /// - Parameters:
-    ///   - keyCode: 按键码
-    ///   - modifiers: 修饰键
-    ///   - excludeType: 排除的类型（"bookmark" 或 "2fa"）
-    /// - Returns: 冲突的描述，nil 表示无冲突
-    func checkHotKeyConflict(keyCode: UInt32, modifiers: UInt32, excludeType: String?) -> String? {
-        // 检查与主快捷键的冲突
-        if keyCode == currentKeyCode && modifiers == currentModifiers && !useDoubleTapModifier {
-            return "启动快捷键"
-        }
-
-        // 检查与书签快捷键的冲突
-        if excludeType != "bookmark" {
-            let bookmarkSettings = BookmarkSettings.load()
-            if bookmarkSettings.hotKeyCode == keyCode
-                && bookmarkSettings.hotKeyModifiers == modifiers
-            {
-                return "搜索书签"
-            }
-        }
-
-        // 检查与 2FA 快捷键的冲突
-        if excludeType != "2fa" {
-            let twoFASettings = TwoFactorAuthSettings.load()
-            if twoFASettings.hotKeyCode == keyCode && twoFASettings.hotKeyModifiers == modifiers {
-                return "2FA 短信"
-            }
-        }
-
-        // 检查与剪贴板快捷键的冲突
-        if excludeType != "clipboard" {
-            let clipboardSettings = ClipboardSettings.load()
-            if clipboardSettings.hotKeyCode == keyCode
-                && clipboardSettings.hotKeyModifiers == modifiers
-            {
-                return "剪贴板"
-            }
-        }
-
-        // 检查与纯文本粘贴快捷键的冲突
-        if excludeType != "plainTextPaste" {
-            let clipboardSettings = ClipboardSettings.load()
-            if clipboardSettings.plainTextHotKeyCode == keyCode
-                && clipboardSettings.plainTextHotKeyModifiers == modifiers
-            {
-                return "纯文本粘贴"
-            }
-        }
-
-        // 检查与选词翻译快捷键的冲突
-        if excludeType != "translateSelection" {
-            let translateSettings = AITranslateSettings.load()
-            if translateSettings.selectionHotKeyCode == keyCode
-                && translateSettings.selectionHotKeyModifiers == modifiers
-            {
-                return "选词翻译"
-            }
-        }
-
-        // 检查与输入翻译快捷键的冲突
-        if excludeType != "translateInput" {
-            let translateSettings = AITranslateSettings.load()
-            if translateSettings.inputHotKeyCode == keyCode
-                && translateSettings.inputHotKeyModifiers == modifiers
-            {
-                return "输入翻译"
-            }
-        }
-
-        // 检查与工具快捷键的冲突
-        let toolsConfig = ToolsConfig.load()
-        for tool in toolsConfig.tools {
-            if let hotKey = tool.hotKey,
-                hotKey.keyCode == keyCode && hotKey.modifiers == modifiers
-            {
-                return tool.name
-            }
-            if tool.supportsExtension, let extKey = tool.extensionHotKey,
-                extKey.keyCode == keyCode && extKey.modifiers == modifiers
-            {
-                return tool.name + " (进入扩展)"
-            }
-        }
-
-        return nil
-    }
-
     // MARK: - 事件处理
 
     /// 内部事件处理方法
-    fileprivate func handleEvent(_ event: EventRef?) -> OSStatus {
+    func handleEvent(_ event: EventRef?) -> OSStatus {
         guard let event = event else { return OSStatus(eventNotHandledErr) }
 
         var hotKeyID = EventHotKeyID()
@@ -1245,7 +363,7 @@ class HotKeyService: ObservableObject {
 
 // MARK: - Helpers
 
-private func byteAt(_ string: String, _ index: Int) -> UInt8 {
+func byteAt(_ string: String, _ index: Int) -> UInt8 {
     let array = Array(string.utf8)
     guard index < array.count else { return 0 }
     return array[index]
