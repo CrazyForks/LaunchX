@@ -11,11 +11,11 @@
 - [x] 2.1 创建 Views/Components/HotKeyRecorderView.swift（通用快捷键录制组件）
 - [x] 2.2 创建 Views/Components/SettingsRow.swift（通用设置行布局组件）
 - [x] 2.3 创建 Views/Components/KeyCapView.swift（通用按键显示组件）
-- [ ] 2.4 更新 BookmarkSearchSettingsView 使用 HotKeyRecorderView
-- [ ] 2.5 更新 TwoFactorAuthSettingsView 使用 HotKeyRecorderView
+- [x] 2.4 更新 BookmarkSearchSettingsView 使用 HotKeyRecorderView
+- [x] 2.5 更新 TwoFactorAuthSettingsView 使用 HotKeyRecorderView
 - [ ] 2.6 更新所有设置视图使用 SettingsRow
 - [ ] 2.7 更新所有快捷键显示使用 KeyCapView
-- [ ] 2.8 删除重复的快捷键录制代码
+- [x] 2.8 删除重复的快捷键录制代码
 - [ ] 2.9 测试所有设置视图的快捷键功能
 
 ## 3. 创建工具类

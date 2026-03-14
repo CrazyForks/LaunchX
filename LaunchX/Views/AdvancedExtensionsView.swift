@@ -198,7 +198,31 @@ struct BookmarkSearchSettingsView: View {
                 HStack {
                     Text("直接打开扩展快捷键:")
                         .frame(width: labelWidth, alignment: .trailing)
-                    BookmarkHotKeyButton(settings: $settings, showPopover: $showHotKeyPopover)
+                    ExtensionHotKeyButton(
+                        keyCode: $settings.hotKeyCode,
+                        modifiers: $settings.hotKeyModifiers,
+                        showPopover: $showHotKeyPopover
+                    )
+                    .popover(isPresented: $showHotKeyPopover) {
+                        ExtensionHotKeyRecorderPopover(
+                            keyCode: $settings.hotKeyCode,
+                            modifiers: $settings.hotKeyModifiers,
+                            isPresented: $showHotKeyPopover,
+                            exampleKey: "B",
+                            onSave: { settings.save() },
+                            onUnregister: { HotKeyService.shared.unregisterBookmarkHotKey() },
+                            onRegister: { keyCode, modifiers in
+                                HotKeyService.shared.registerBookmarkHotKey(keyCode: keyCode, modifiers: modifiers)
+                            },
+                            checkConflict: { keyCode, modifiers in
+                                HotKeyService.shared.checkConflict(
+                                    keyCode: keyCode,
+                                    modifiers: modifiers,
+                                    excludingMainHotKey: false
+                                )
+                            }
+                        )
+                    }
                     Spacer()
                 }
 
@@ -334,184 +358,6 @@ struct BookmarkSearchSettingsView: View {
     }
 }
 
-// MARK: - 书签快捷键按钮（与网页直达样式一致）
-
-struct BookmarkHotKeyButton: View {
-    @Binding var settings: BookmarkSettings
-    @Binding var showPopover: Bool
-    @State private var isHovered = false
-
-    private var hasHotKey: Bool {
-        settings.hotKeyCode != 0
-    }
-
-    var body: some View {
-        Button(action: {
-            showPopover = true
-        }) {
-            Group {
-                if hasHotKey {
-                    HStack(spacing: 2) {
-                        ForEach(
-                            HotKeyService.modifierSymbols(for: settings.hotKeyModifiers), id: \.self
-                        ) { symbol in
-                            KeyCapViewSettings(text: symbol)
-                        }
-                        KeyCapViewSettings(text: HotKeyService.keyString(for: settings.hotKeyCode))
-                    }
-                } else {
-                    Text("快捷键")
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(
-                        (isHovered && !hasHotKey) ? Color.secondary.opacity(0.5) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .popover(isPresented: $showPopover) {
-            BookmarkHotKeyRecorderPopover(settings: $settings, isPresented: $showPopover)
-        }
-    }
-}
-
-// MARK: - 书签快捷键录制弹窗
-
-struct BookmarkHotKeyRecorderPopover: View {
-    @Binding var settings: BookmarkSettings
-    @Binding var isPresented: Bool
-    @State private var keyDownMonitor: Any?
-    @State private var conflictMessage: String?
-
-    private var hasHotKey: Bool {
-        settings.hotKeyCode != 0
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            // 示例提示
-            HStack(spacing: 4) {
-                Text("例如")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-                KeyCapView(text: "⌃")
-                KeyCapView(text: "⌥")
-                KeyCapView(text: "B")
-            }
-            .padding(.top, 8)
-
-            // 提示文字或冲突信息
-            if let conflict = conflictMessage {
-                Text("快捷键已被「\(conflict)」使用")
-                    .foregroundColor(.red)
-                    .font(.system(size: 12))
-            } else {
-                Text("请输入快捷键...")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-            }
-
-            if hasHotKey {
-                HStack(spacing: 3) {
-                    ForEach(
-                        HotKeyService.modifierSymbols(for: settings.hotKeyModifiers), id: \.self
-                    ) { symbol in
-                        KeyCapView(text: symbol)
-                    }
-                    KeyCapView(text: HotKeyService.keyString(for: settings.hotKeyCode))
-
-                    Button {
-                        settings.hotKeyCode = 0
-                        settings.hotKeyModifiers = 0
-                        settings.save()
-                        HotKeyService.shared.unregisterBookmarkHotKey()
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.2))
-                .cornerRadius(6)
-            }
-        }
-        .padding(16)
-        .frame(width: 220)
-        .onAppear {
-            HotKeyService.shared.suspendAllHotKeys()
-            startRecording()
-        }
-        .onDisappear {
-            stopRecording()
-            HotKeyService.shared.resumeAllHotKeys()
-        }
-    }
-
-    private func startRecording() {
-        conflictMessage = nil
-        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
-            if event.keyCode == kVK_Escape {
-                stopRecording()
-                isPresented = false
-                return nil
-            }
-
-            if event.keyCode == kVK_Delete || event.keyCode == kVK_ForwardDelete {
-                settings.hotKeyCode = 0
-                settings.hotKeyModifiers = 0
-                settings.save()
-                HotKeyService.shared.unregisterBookmarkHotKey()
-                stopRecording()
-                isPresented = false
-                return nil
-            }
-
-            let modifiers = HotKeyService.carbonModifiers(from: event.modifierFlags)
-            guard modifiers != 0 else { return event }
-
-            let keyCode = UInt32(event.keyCode)
-
-            // 检查冲突
-            if let conflict = HotKeyService.shared.checkConflict(
-                keyCode: keyCode, modifiers: modifiers, excludingMainHotKey: false)
-            {
-                conflictMessage = conflict
-                return nil
-            }
-
-            // 设置快捷键
-            settings.hotKeyCode = keyCode
-            settings.hotKeyModifiers = modifiers
-            settings.save()
-            HotKeyService.shared.registerBookmarkHotKey(keyCode: keyCode, modifiers: modifiers)
-            stopRecording()
-            isPresented = false
-            return nil
-        }
-    }
-
-    private func stopRecording() {
-        if let monitor = keyDownMonitor {
-            NSEvent.removeMonitor(monitor)
-            keyDownMonitor = nil
-        }
-    }
-}
-
 // MARK: - 浏览器开关行
 
 struct BrowserToggleRow: View {
@@ -635,7 +481,31 @@ struct TwoFactorAuthSettingsView: View {
                 HStack {
                     Text("直接打开扩展快捷键:")
                         .frame(width: labelWidth, alignment: .trailing)
-                    TwoFactorAuthHotKeyButton(settings: $settings, showPopover: $showHotKeyPopover)
+                    ExtensionHotKeyButton(
+                        keyCode: $settings.hotKeyCode,
+                        modifiers: $settings.hotKeyModifiers,
+                        showPopover: $showHotKeyPopover
+                    )
+                    .popover(isPresented: $showHotKeyPopover) {
+                        ExtensionHotKeyRecorderPopover(
+                            keyCode: $settings.hotKeyCode,
+                            modifiers: $settings.hotKeyModifiers,
+                            isPresented: $showHotKeyPopover,
+                            exampleKey: "2",
+                            onSave: { settings.save() },
+                            onUnregister: { HotKeyService.shared.unregister2FAHotKey() },
+                            onRegister: { keyCode, modifiers in
+                                HotKeyService.shared.register2FAHotKey(keyCode: keyCode, modifiers: modifiers)
+                            },
+                            checkConflict: { keyCode, modifiers in
+                                HotKeyService.shared.checkHotKeyConflict(
+                                    keyCode: keyCode,
+                                    modifiers: modifiers,
+                                    excludeType: "2fa"
+                                )
+                            }
+                        )
+                    }
                     Spacer()
                 }
 
@@ -796,190 +666,6 @@ struct SetupStepRow: View {
             Text(text)
                 .font(.caption)
                 .foregroundColor(.secondary)
-        }
-    }
-}
-
-// MARK: - 2FA 快捷键按钮
-
-struct TwoFactorAuthHotKeyButton: View {
-    @Binding var settings: TwoFactorAuthSettings
-    @Binding var showPopover: Bool
-    @State private var isHovered = false
-
-    private var hasHotKey: Bool {
-        settings.hotKeyCode != 0
-    }
-
-    var body: some View {
-        Button(action: {
-            showPopover = true
-        }) {
-            Group {
-                if hasHotKey {
-                    HStack(spacing: 2) {
-                        ForEach(
-                            HotKeyService.modifierSymbols(for: settings.hotKeyModifiers), id: \.self
-                        ) { symbol in
-                            KeyCapViewSettings(text: symbol)
-                        }
-                        KeyCapViewSettings(text: HotKeyService.keyString(for: settings.hotKeyCode))
-                    }
-                } else {
-                    Text("快捷键")
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(
-                        (isHovered && !hasHotKey) ? Color.secondary.opacity(0.5) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .popover(isPresented: $showPopover) {
-            TwoFactorAuthHotKeyRecorderPopover(settings: $settings, isPresented: $showPopover)
-        }
-    }
-}
-
-// MARK: - 2FA 快捷键录制弹窗
-
-struct TwoFactorAuthHotKeyRecorderPopover: View {
-    @Binding var settings: TwoFactorAuthSettings
-    @Binding var isPresented: Bool
-    @State private var keyDownMonitor: Any?
-    @State private var conflictMessage: String?
-
-    private var hasHotKey: Bool {
-        settings.hotKeyCode != 0
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            // 示例提示
-            HStack(spacing: 4) {
-                Text("例如")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-                KeyCapView(text: "⌃")
-                KeyCapView(text: "⌥")
-                KeyCapView(text: "2")
-            }
-            .padding(.top, 8)
-
-            // 提示文字或冲突信息
-            if let conflict = conflictMessage {
-                Text("快捷键已被「\(conflict)」使用")
-                    .foregroundColor(.red)
-                    .font(.system(size: 12))
-            } else {
-                Text("请输入快捷键...")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-            }
-
-            if hasHotKey {
-                HStack(spacing: 3) {
-                    ForEach(
-                        HotKeyService.modifierSymbols(for: settings.hotKeyModifiers), id: \.self
-                    ) { symbol in
-                        KeyCapView(text: symbol)
-                    }
-                    KeyCapView(text: HotKeyService.keyString(for: settings.hotKeyCode))
-
-                    Button {
-                        settings.hotKeyCode = 0
-                        settings.hotKeyModifiers = 0
-                        settings.save()
-                        HotKeyService.shared.unregister2FAHotKey()
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.2))
-                .cornerRadius(6)
-            }
-        }
-        .padding(16)
-        .frame(width: 220)
-        .onAppear {
-            HotKeyService.shared.suspendAllHotKeys()
-            startListening()
-        }
-        .onDisappear {
-            stopListening()
-            HotKeyService.shared.resumeAllHotKeys()
-        }
-    }
-
-    private func startListening() {
-        conflictMessage = nil
-        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Esc 键取消
-            if event.keyCode == kVK_Escape {
-                stopListening()
-                isPresented = false
-                return nil
-            }
-
-            // Delete 键清除快捷键
-            if event.keyCode == kVK_Delete || event.keyCode == kVK_ForwardDelete {
-                settings.hotKeyCode = 0
-                settings.hotKeyModifiers = 0
-                settings.save()
-                HotKeyService.shared.unregister2FAHotKey()
-                stopListening()
-                isPresented = false
-                return nil
-            }
-
-            // 使用 Carbon 修饰键格式
-            let modifiers = HotKeyService.carbonModifiers(from: event.modifierFlags)
-            guard modifiers != 0 else { return event }
-
-            let keyCode = UInt32(event.keyCode)
-
-            // 检查快捷键冲突
-            if let conflict = HotKeyService.shared.checkHotKeyConflict(
-                keyCode: keyCode, modifiers: modifiers, excludeType: "2fa")
-            {
-                conflictMessage = conflict
-                return nil
-            }
-
-            // 设置快捷键
-            settings.hotKeyCode = keyCode
-            settings.hotKeyModifiers = modifiers
-            settings.save()
-
-            // 注册快捷键
-            HotKeyService.shared.register2FAHotKey(keyCode: keyCode, modifiers: modifiers)
-
-            stopListening()
-            isPresented = false
-            return nil
-        }
-    }
-
-    private func stopListening() {
-        if let monitor = keyDownMonitor {
-            NSEvent.removeMonitor(monitor)
-            keyDownMonitor = nil
         }
     }
 }
