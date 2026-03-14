@@ -1,10 +1,8 @@
 schema: spec-driven
 
 context: |
-    Description: A cli repository maintains some development templates
-    Tech stack：TypeScript, Vue3, React19, Vite, Tan Stack,
-    API conventions: RESTful, JSON responses
-    Style: oxlint, oxfmt, strict TypeScript
+    Description: Macos App, same as Raycast, Hapigo
+    Tech stack：Swift, sparkle
 
 rules:
     proposal:
