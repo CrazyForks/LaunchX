@@ -64,19 +64,49 @@ All shared components SHALL follow SwiftUI best practices with @Binding for two-
 - **THEN** the content is rendered without modification using @ViewBuilder
 
 ### Requirement: Settings Header Style Consistency
-所有高级拓展设置详细页面的头部 MUST 使用统一的 icon 尺寸和标题文字大小。
+所有高级扩展设置页面的顶部区域 MUST 具有统一的高度和视觉样式。
 
-#### Scenario: Header icon size is consistent
-- **WHEN** any advanced extension settings detail page is displayed
-- **THEN** the header icon size MUST match the size used in TerminalSettingsView
-
-#### Scenario: Header title font size is consistent
-- **WHEN** any advanced extension settings detail page is displayed
-- **THEN** the header title font size MUST match the size used in TerminalSettingsView
-
-#### Scenario: All settings pages use same header style
+#### Scenario: All settings pages have consistent header height
 - **WHEN** user navigates between different advanced extension settings pages (Terminal, Clipboard, AI Translate, etc.)
-- **THEN** all pages display headers with identical icon size and title font size
+- **THEN** all page headers MUST have identical height
+
+#### Scenario: Header icon size is consistent across all pages
+- **WHEN** any advanced extension settings page is displayed
+- **THEN** the header icon size MUST be consistent across all pages
+
+#### Scenario: Header title font size is consistent across all pages
+- **WHEN** any advanced extension settings page is displayed
+- **THEN** the header title font size MUST be consistent across all pages
+
+#### Scenario: Header padding and spacing is consistent across all pages
+- **WHEN** any advanced extension settings page is displayed
+- **THEN** the header padding (top, bottom, leading, trailing) and spacing between icon and title MUST be consistent across all pages
+
+### Requirement: Settings Header Style Standards
+系统 SHALL 定义并应用统一的设置页面顶部样式标准。
+
+#### Scenario: Standard icon size is defined
+- **WHEN** implementing or updating a settings page header
+- **THEN** the icon size MUST conform to the defined standard (e.g., 24x24 points frame with 20pt font)
+
+#### Scenario: Standard title font is defined
+- **WHEN** implementing or updating a settings page header
+- **THEN** the title font size and weight MUST conform to the defined standard
+
+#### Scenario: Standard spacing values are defined
+- **WHEN** implementing or updating a settings page header
+- **THEN** the spacing between elements and padding values MUST conform to the defined standards
+
+### Requirement: Visual Consistency Verification
+系统 MUST 确保所有现有和未来的设置页面都遵循统一的顶部样式规范。
+
+#### Scenario: Existing settings pages are updated to match standards
+- **WHEN** the style standards are defined
+- **THEN** all existing advanced extension settings pages MUST be updated to match the standards
+
+#### Scenario: New settings pages follow the standards
+- **WHEN** a new advanced extension settings page is created
+- **THEN** the page header MUST follow the established style standards from the beginning
 
 ### Requirement: Terminal Icon Design
 终端设置的 icon MUST 使用更美观的设计。
