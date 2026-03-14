@@ -27,12 +27,12 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 
     var sfSymbolName: String {
         switch self {
-        case .clipboard: return "doc.on.clipboard"
+        case .clipboard: return "doc.on.clipboard.fill"
         case .snippet: return "chevron.left.forwardslash.chevron.right"
         case .aiTranslate: return "character.bubble.fill"
         case .bookmarkSearch: return "bookmark.fill"
         case .twoFactorAuth: return "lock.shield.fill"
-        case .terminal: return "terminal"
+        case .terminal: return "terminal.fill"
         }
     }
 
@@ -43,7 +43,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .aiTranslate: return .indigo
         case .bookmarkSearch: return .pink
         case .twoFactorAuth: return .green
-        case .terminal: return .blue
+        case .terminal: return .gray
         }
     }
 }
@@ -122,10 +122,9 @@ struct ExtensionSidebarItem: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: sfSymbolName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
+                    .font(.system(size: 14))
                     .foregroundColor(iconColor)
+                    .frame(width: 14, alignment: .center)
                 Text(title)
                     .foregroundColor(.primary)
                 Spacer()

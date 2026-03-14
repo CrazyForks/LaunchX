@@ -24,15 +24,14 @@ struct BookmarkSearchSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 12) {
                     Image(systemName: AdvancedExtensionType.bookmarkSearch.sfSymbolName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                        .font(.system(size: 24))
                         .foregroundColor(AdvancedExtensionType.bookmarkSearch.iconColor)
                     Text("搜索书签")
-                        .font(.headline)
+                        .font(.title2)
+                        .fontWeight(.bold)
                     Spacer()
 
                     Toggle("", isOn: $settings.isEnabled)
@@ -41,6 +40,9 @@ struct BookmarkSearchSettingsView: View {
                             settings.save()
                         }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
 
                 Divider()
 
@@ -74,6 +76,8 @@ struct BookmarkSearchSettingsView: View {
                     }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 HStack {
                     Text("别名:")
@@ -86,6 +90,8 @@ struct BookmarkSearchSettingsView: View {
                         }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 HStack {
                     Text("打开浏览器:")
@@ -108,8 +114,11 @@ struct BookmarkSearchSettingsView: View {
                     }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("搜索浏览器")
@@ -138,6 +147,7 @@ struct BookmarkSearchSettingsView: View {
                     }
                     .padding(.top, 4)
                 }
+                .padding(20)
 
                 if !safariAccessible {
                     HStack {
@@ -156,11 +166,11 @@ struct BookmarkSearchSettingsView: View {
                     .padding(10)
                     .background(Color.orange.opacity(0.1))
                     .cornerRadius(8)
+                    .padding(.horizontal, 20)
                 }
 
                 Spacer()
             }
-            .padding(20)
         }
         .onAppear {
             checkAccess()

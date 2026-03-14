@@ -70,7 +70,7 @@ struct ToolItemRow: View {
                         .help("已配置为默认搜索")
                 }
             }
-            .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 140, maxWidth: .infinity, alignment: .leading)
 
             // 别名输入（内置工具只读）
             if tool.isBuiltIn {
@@ -108,7 +108,7 @@ struct ToolItemRow: View {
                     hotKey: tool.hotKey,
                     onTap: { showHotKeyPopover = true }
                 )
-                .frame(width: 90)
+                .frame(width: 130)
                 .popover(isPresented: $showHotKeyPopover) {
                     ToolHotKeyRecorderPopover(
                         hotKey: Binding(
@@ -126,7 +126,7 @@ struct ToolItemRow: View {
             } else {
                 Text("-")
                     .foregroundColor(.secondary)
-                    .frame(width: 90)
+                    .frame(width: 130)
             }
 
             // 进入扩展快捷键
@@ -135,7 +135,7 @@ struct ToolItemRow: View {
                     hotKey: tool.extensionHotKey,
                     onTap: { showExtensionHotKeyPopover = true }
                 )
-                .frame(width: 90)
+                .frame(width: 130)
                 .popover(isPresented: $showExtensionHotKeyPopover) {
                     ToolHotKeyRecorderPopover(
                         hotKey: Binding(
@@ -153,7 +153,7 @@ struct ToolItemRow: View {
             } else {
                 Text("-")
                     .foregroundColor(.secondary)
-                    .frame(width: 90)
+                    .frame(width: 130)
             }
 
             // 启用开关

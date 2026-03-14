@@ -16,16 +16,15 @@ struct AITranslateSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 // 标题行
                 HStack(spacing: 12) {
                     Image(systemName: "character.bubble.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                        .font(.system(size: 24))
                         .foregroundColor(.indigo)
                     Text("AI 翻译")
-                        .font(.headline)
+                        .font(.title2)
+                        .fontWeight(.bold)
                     Spacer()
                     Toggle("", isOn: $settings.isEnabled)
                         .toggleStyle(.switch)
@@ -33,6 +32,9 @@ struct AITranslateSettingsView: View {
                             settings.save()
                         }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
 
                 Divider()
 
@@ -74,8 +76,11 @@ struct AITranslateSettingsView: View {
                         Spacer()
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 // AI 模型配置
                 VStack(alignment: .leading, spacing: 10) {
@@ -122,8 +127,11 @@ struct AITranslateSettingsView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 // 翻译服务配置
                 VStack(alignment: .leading, spacing: 10) {
@@ -146,10 +154,10 @@ struct AITranslateSettingsView: View {
                         )
                     }
                 }
+                .padding(20)
 
                 Spacer()
             }
-            .padding(20)
         }
         .sheet(isPresented: $showAddModelSheet) {
             ModelConfigEditorSheet(mode: .add) { newConfig in

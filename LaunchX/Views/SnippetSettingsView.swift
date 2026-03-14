@@ -23,12 +23,11 @@ struct SnippetSettingsView: View {
             // 标题行
             HStack(spacing: 12) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
+                    .font(.system(size: 24))
                     .foregroundColor(.orange)
                 Text("Snippet")
-                    .font(.headline)
+                    .font(.title2)
+                    .fontWeight(.bold)
                 Spacer()
                 Toggle("", isOn: $settings.isEnabled)
                     .toggleStyle(.switch)

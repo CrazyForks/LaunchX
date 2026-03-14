@@ -10,15 +10,14 @@ struct TwoFactorAuthSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 12) {
                     Image(systemName: AdvancedExtensionType.twoFactorAuth.sfSymbolName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                        .font(.system(size: 24))
                         .foregroundColor(AdvancedExtensionType.twoFactorAuth.iconColor)
                     Text("2FA 短信")
-                        .font(.headline)
+                        .font(.title2)
+                        .fontWeight(.bold)
                     Spacer()
 
                     Toggle("", isOn: $settings.isEnabled)
@@ -27,6 +26,9 @@ struct TwoFactorAuthSettingsView: View {
                             settings.save()
                         }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
 
                 Divider()
 
@@ -60,6 +62,8 @@ struct TwoFactorAuthSettingsView: View {
                     }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 HStack {
                     Text("别名:")
@@ -72,6 +76,8 @@ struct TwoFactorAuthSettingsView: View {
                         }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 HStack {
                     Text("搜索时间范围:")
@@ -90,6 +96,8 @@ struct TwoFactorAuthSettingsView: View {
                     }
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 HStack {
                     Text("复制后删除短信:")
@@ -104,8 +112,11 @@ struct TwoFactorAuthSettingsView: View {
                         .foregroundColor(.orange)
                     Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("权限状态")
@@ -143,6 +154,7 @@ struct TwoFactorAuthSettingsView: View {
                         .padding(.top, 4)
                     }
                 }
+                .padding(20)
 
                 Divider()
 
@@ -164,10 +176,10 @@ struct TwoFactorAuthSettingsView: View {
                     .font(.caption)
                     .padding(.top, 4)
                 }
+                .padding(20)
 
                 Spacer()
             }
-            .padding(20)
         }
         .onAppear {
             checkPermissions()

@@ -16,16 +16,15 @@ struct ClipboardSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 // 标题行
                 HStack(spacing: 12) {
-                    Image(systemName: "doc.on.clipboard")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                    Image(systemName: "doc.on.clipboard.fill")
+                        .font(.system(size: 24))
                         .foregroundColor(.blue)
                     Text("剪贴板")
-                        .font(.headline)
+                        .font(.title2)
+                        .fontWeight(.bold)
                     Spacer()
                     Toggle("", isOn: $settings.isEnabled)
                         .toggleStyle(.switch)
@@ -38,6 +37,9 @@ struct ClipboardSettingsView: View {
                             }
                         }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
 
                 Divider()
 
@@ -79,6 +81,8 @@ struct ClipboardSettingsView: View {
                         Spacer()
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 // 行为设置
                 Group {
@@ -99,8 +103,11 @@ struct ClipboardSettingsView: View {
                         Spacer()
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 // 存储设置
                 Group {
@@ -167,8 +174,11 @@ struct ClipboardSettingsView: View {
                         Spacer()
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
                 Divider()
+                    .padding(.top, 16)
 
                 // 忽略应用列表
                 VStack(alignment: .leading, spacing: 10) {
@@ -207,10 +217,10 @@ struct ClipboardSettingsView: View {
                         .cornerRadius(6)
                     }
                 }
+                .padding(20)
 
                 Spacer()
             }
-            .padding(20)
         }
         .onAppear {
             loadIgnoredApps()

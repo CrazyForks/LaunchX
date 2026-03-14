@@ -34,13 +34,13 @@ struct ToolsSettingsView: View {
             // 列表表头
             HStack(spacing: 12) {
                 Text("名称")
-                    .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+                    .frame(minWidth: 140, maxWidth: .infinity, alignment: .leading)
                 Text("别名")
                     .frame(width: 70, alignment: .leading)
                 Text("快捷键")
-                    .frame(width: 90, alignment: .center)
+                    .frame(width: 130, alignment: .center)
                 Text("进入扩展")
-                    .frame(width: 90, alignment: .center)
+                    .frame(width: 130, alignment: .center)
                 Text("启用")
                     .frame(width: 44, alignment: .center)
                 Spacer()
