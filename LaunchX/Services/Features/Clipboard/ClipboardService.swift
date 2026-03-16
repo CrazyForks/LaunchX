@@ -285,9 +285,15 @@ final class ClipboardService: ObservableObject {
             if let url = URL(string: text),
                 url.scheme == "http" || url.scheme == "https"
             {
+                // 读取富文本格式数据
+                let rtfData = pasteboard.data(forType: .rtf)
+                let htmlData = pasteboard.data(forType: .html)
+
                 return ClipboardItem(
                     contentType: .link,
                     textContent: text,
+                    rtfData: rtfData,
+                    htmlData: htmlData,
                     sourceAppBundleId: appInfo.bundleId,
                     sourceAppName: appInfo.name
                 )
@@ -307,10 +313,15 @@ final class ClipboardService: ObservableObject {
                 )
             }
 
-            // 普通文本
+            // 普通文本 - 读取富文本格式数据
+            let rtfData = pasteboard.data(forType: .rtf)
+            let htmlData = pasteboard.data(forType: .html)
+
             return ClipboardItem(
                 contentType: .text,
                 textContent: text,
+                rtfData: rtfData,
+                htmlData: htmlData,
                 sourceAppBundleId: appInfo.bundleId,
                 sourceAppName: appInfo.name
             )
@@ -333,6 +344,8 @@ final class ClipboardService: ObservableObject {
                 createdAt: Date(),
                 isPinned: existing.isPinned,
                 textContent: existing.textContent,
+                rtfData: item.rtfData ?? existing.rtfData,
+                htmlData: item.htmlData ?? existing.htmlData,
                 imageData: existing.imageData ?? item.imageData,
                 filePaths: existing.filePaths,
                 colorHex: existing.colorHex,
@@ -471,6 +484,8 @@ final class ClipboardService: ObservableObject {
             createdAt: Date(),
             isPinned: movedItem.isPinned,
             textContent: movedItem.textContent,
+            rtfData: movedItem.rtfData,
+            htmlData: movedItem.htmlData,
             imageData: movedItem.imageData,
             filePaths: movedItem.filePaths,
             colorHex: movedItem.colorHex,
@@ -488,23 +503,44 @@ final class ClipboardService: ObservableObject {
     /// 粘贴指定项目（保持原始格式）
     func paste(_ item: ClipboardItem) {
         writeToClipboard(item, asPlainText: false)
-        simulatePaste()
+
+        // 延迟执行粘贴，确保剪贴板写入完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.simulatePaste()
+        }
     }
 
     /// 粘贴为纯文本
     func pasteAsPlainText(_ item: ClipboardItem) {
         writeToClipboard(item, asPlainText: true)
-        simulatePaste()
+
+        // 延迟执行粘贴，确保剪贴板写入完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.simulatePaste()
+        }
     }
 
     /// 写入剪贴板
-    private func writeToClipboard(_ item: ClipboardItem, asPlainText: Bool) {
+    func writeToClipboard(_ item: ClipboardItem, asPlainText: Bool) {
         pasteboard.clearContents()
 
         switch item.contentType {
         case .text, .link:
             if let text = item.textContent {
-                pasteboard.setString(text, forType: .string)
+                if asPlainText {
+                    // 纯文本模式：只写入纯文本
+                    pasteboard.setString(text, forType: .string)
+                } else {
+                    // 保留格式模式：按优先级写入多种格式
+                    if let rtfData = item.rtfData {
+                        pasteboard.setData(rtfData, forType: .rtf)
+                    }
+                    if let htmlData = item.htmlData {
+                        pasteboard.setData(htmlData, forType: .html)
+                    }
+                    // 始终写入纯文本作为兜底
+                    pasteboard.setString(text, forType: .string)
+                }
             }
         case .color:
             if let hex = item.colorHex {
@@ -541,19 +577,25 @@ final class ClipboardService: ObservableObject {
         simulatePaste()
     }
 
+    /// 同步 lastChangeCount 到当前剪贴板状态（避免监控逻辑重复记录）
+    func syncChangeCount() {
+        lastChangeCount = pasteboard.changeCount
+    }
+
     /// 模拟 Cmd+V 粘贴
     private func simulatePaste() {
-        let source = CGEventSource(stateID: .hidSystemState)
+        // 使用 combinedSessionState 而不是 hidSystemState，更适合模拟用户输入
+        let source = CGEventSource(stateID: .combinedSessionState)
 
         // Key down
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)  // V key
         keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
+        keyDown?.post(tap: .cgSessionEventTap)
 
         // Key up
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
         keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cgSessionEventTap)
     }
 
     // MARK: - 搜索
