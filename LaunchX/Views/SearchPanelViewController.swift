@@ -261,11 +261,9 @@ class SearchPanelViewController: NSViewController {
         // 加载最近使用的应用
         loadRecentApps()
 
-        // 请求提醒事项权限并加载
-        RemindersService.shared.requestAccess { [weak self] granted in
-            if granted {
-                self?.loadReminders()
-            }
+        // 如果提醒事项功能已启用且已授权，则加载提醒事项
+        if RemindersSettings.load().isEnabled && RemindersService.shared.checkAuthorization() {
+            loadReminders()
         }
 
         // Register for panel show callback to refresh recent apps
@@ -280,7 +278,9 @@ class SearchPanelViewController: NSViewController {
 
             // 异步加载数据，加载完成后会自动触发刷新
             self.loadRecentApps()
-            self.loadReminders()
+            if RemindersSettings.load().isEnabled && RemindersService.shared.checkAuthorization() {
+                self.loadReminders()
+            }
             // 初始同步显示已有缓存数据
             self.performSearch("")
         }
@@ -365,6 +365,14 @@ class SearchPanelViewController: NSViewController {
             object: nil
         )
 
+        // 监听清空提醒事项通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClearReminders),
+            name: Notification.Name("ClearRemindersNotification"),
+            object: nil
+        )
+
         // 监听工具配置变更
         NotificationCenter.default.addObserver(
             self,
@@ -384,6 +392,14 @@ class SearchPanelViewController: NSViewController {
 
     @objc func handleRemindersDidChange() {
         loadReminders()
+    }
+
+    @objc func handleClearReminders() {
+        reminderResults = []
+        // 如果当前没有搜索内容且不在扩展模式，刷新显示
+        if searchField.stringValue.isEmpty && !isInAnyExtensionMode {
+            performSearch("")
+        }
     }
 
     /// 处理液态玻璃设置变化

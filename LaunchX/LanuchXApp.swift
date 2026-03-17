@@ -44,6 +44,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 首先检查是否运行在 Translocation 模式，这会影响更新和权限
         checkTranslocation()
 
+        // 迁移提醒事项设置：为已授权用户自动启用功能
+        migrateRemindersSettings()
+
         setupSettingsOpenerWindow()
         observeHotKeyChanges()
 
@@ -91,6 +94,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.alertStyle = .warning
             alert.addButton(withTitle: "我知道了")
             alert.runModal()
+        }
+    }
+
+    /// 迁移提醒事项设置：为已授权用户自动启用功能
+    private func migrateRemindersSettings() {
+        // 检查是否已经迁移过（通过检查 UserDefaults 中是否存在设置）
+        let hasMigrated = UserDefaults.standard.object(forKey: "remindersEnabled") != nil
+
+        if !hasMigrated {
+            // 检查用户是否已经授权提醒事项
+            if RemindersService.shared.checkAuthorization() {
+                // 已授权用户，自动启用功能
+                var settings = RemindersSettings.load()
+                settings.isEnabled = true
+                settings.save()
+            }
         }
     }
 

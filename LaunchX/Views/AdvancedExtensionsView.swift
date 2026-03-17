@@ -7,6 +7,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case bookmarkSearch = "搜索书签"
     case twoFactorAuth = "2FA 短信"
     case terminal = "终端"
+    case reminders = "提醒事项"
 
     var id: String { rawValue }
 
@@ -33,6 +34,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .bookmarkSearch: return "bookmark.fill"
         case .twoFactorAuth: return "lock.shield.fill"
         case .terminal: return "terminal.fill"
+        case .reminders: return "checklist"
         }
     }
 
@@ -44,6 +46,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .bookmarkSearch: return .pink
         case .twoFactorAuth: return .green
         case .terminal: return .gray
+        case .reminders: return .purple
         }
     }
 }
@@ -93,6 +96,8 @@ struct AdvancedExtensionsView: View {
             AITranslateSettingsView()
         case .terminal:
             TerminalSettingsView()
+        case .reminders:
+            RemindersSettingsView()
         }
     }
 }
