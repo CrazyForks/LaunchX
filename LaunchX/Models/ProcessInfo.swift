@@ -55,7 +55,7 @@ class ProcessManager {
             }
 
             let pid = app.processIdentifier
-            let (cpu, memory) = getProcessStats(pid: pid)
+            let (cpu, memory) = getProcessStatsSync(pid: pid)
 
             let processInfo = RunningProcessInfo(
                 id: pid,
@@ -75,8 +75,22 @@ class ProcessManager {
 
     // MARK: - 获取监听端口的进程
 
-    /// 获取所有监听端口的进程
-    func getListeningPortProcesses() -> [RunningProcessInfo] {
+    /// 获取所有监听端口的进程（异步版本）
+    func getListeningPortProcesses(completion: @escaping ([RunningProcessInfo]) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+            let processes = self.getListeningPortProcessesSync()
+            DispatchQueue.main.async {
+                completion(processes)
+            }
+        }
+    }
+
+    /// 获取所有监听端口的进程（同步版本，内部使用）
+    func getListeningPortProcessesSync() -> [RunningProcessInfo] {
         var processes: [RunningProcessInfo] = []
         var seenPorts = Set<Int>()
 
@@ -127,7 +141,7 @@ class ProcessManager {
                     name = String(parts[0])
                 }
 
-                let (cpu, memory) = getProcessStats(pid: pid)
+                let (cpu, memory) = getProcessStatsSync(pid: pid)
                 let icon = getProcessIcon(pid: pid)
 
                 let processInfo = RunningProcessInfo(
@@ -151,8 +165,8 @@ class ProcessManager {
 
     // MARK: - 获取进程统计信息
 
-    /// 获取进程的 CPU 和内存使用情况
-    private func getProcessStats(pid: Int32) -> (cpu: Double, memory: UInt64) {
+    /// 获取进程的 CPU 和内存使用情况（同步版本，内部使用）
+    private func getProcessStatsSync(pid: Int32) -> (cpu: Double, memory: UInt64) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/ps")
         task.arguments = ["-p", "\(pid)", "-o", "%cpu=,rss="]

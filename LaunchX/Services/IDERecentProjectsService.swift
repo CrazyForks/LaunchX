@@ -69,24 +69,56 @@ final class IDERecentProjectsService {
         }
     }
 
-    /// 获取指定 IDE 的最近项目
+    /// 获取指定 IDE 的最近项目（异步版本）
     /// - Parameters:
     ///   - ideType: IDE 类型
     ///   - limit: 最大数量
-    /// - Returns: 项目列表
+    ///   - completion: 完成回调，在主线程执行
+    func getRecentProjects(for ideType: IDEType, limit: Int = 20, completion: @escaping ([IDEProject]) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+
+            let projects: [IDEProject]
+            switch ideType {
+            case .vscode:
+                projects = self.getVSCodeRecentProjectsSync(limit: limit)
+            case .cursor:
+                projects = self.getCursorRecentProjectsSync(limit: limit)
+            case .zed:
+                projects = self.getZedRecentProjectsSync(limit: limit)
+            case .antigravity:
+                projects = self.getAntigravityRecentProjectsSync(limit: limit)
+            default:
+                if ideType.isJetBrains {
+                    projects = self.getJetBrainsRecentProjectsSync(for: ideType, limit: limit)
+                } else {
+                    projects = []
+                }
+            }
+
+            DispatchQueue.main.async {
+                completion(projects)
+            }
+        }
+    }
+
+    /// 同步获取指定 IDE 的最近项目（内部使用）
     func getRecentProjects(for ideType: IDEType, limit: Int = 20) -> [IDEProject] {
         switch ideType {
         case .vscode:
-            return getVSCodeRecentProjects(limit: limit)
+            return getVSCodeRecentProjectsSync(limit: limit)
         case .cursor:
-            return getCursorRecentProjects(limit: limit)
+            return getCursorRecentProjectsSync(limit: limit)
         case .zed:
-            return getZedRecentProjects(limit: limit)
+            return getZedRecentProjectsSync(limit: limit)
         case .antigravity:
-            return getAntigravityRecentProjects(limit: limit)
+            return getAntigravityRecentProjectsSync(limit: limit)
         default:
             if ideType.isJetBrains {
-                return getJetBrainsRecentProjects(for: ideType, limit: limit)
+                return getJetBrainsRecentProjectsSync(for: ideType, limit: limit)
             }
             return []
         }
@@ -110,7 +142,7 @@ final class IDERecentProjectsService {
 
     // MARK: - VSCode
 
-    private func getVSCodeRecentProjects(limit: Int) -> [IDEProject] {
+    private func getVSCodeRecentProjectsSync(limit: Int) -> [IDEProject] {
         let dbPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(
                 "Library/Application Support/Code/User/globalStorage/state.vscdb"
@@ -121,7 +153,6 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
         process.arguments = [
@@ -201,7 +232,7 @@ final class IDERecentProjectsService {
 
     // MARK: - Cursor
 
-    private func getCursorRecentProjects(limit: Int) -> [IDEProject] {
+    private func getCursorRecentProjectsSync(limit: Int) -> [IDEProject] {
         let dbPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(
                 "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
@@ -212,7 +243,6 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
         process.arguments = [
@@ -292,7 +322,7 @@ final class IDERecentProjectsService {
 
     // MARK: - Zed
 
-    private func getZedRecentProjects(limit: Int) -> [IDEProject] {
+    private func getZedRecentProjectsSync(limit: Int) -> [IDEProject] {
         let dbPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Zed/db/0-stable/db.sqlite")
             .path
@@ -301,7 +331,6 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
         process.arguments = [
@@ -375,7 +404,7 @@ final class IDERecentProjectsService {
 
     // MARK: - JetBrains
 
-    private func getJetBrainsRecentProjects(for ideType: IDEType, limit: Int) -> [IDEProject] {
+    private func getJetBrainsRecentProjectsSync(for ideType: IDEType, limit: Int) -> [IDEProject] {
         // 查找 JetBrains 配置目录
         let appSupportPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/JetBrains")
@@ -477,7 +506,7 @@ final class IDERecentProjectsService {
 
     // MARK: - Antigravity
 
-    private func getAntigravityRecentProjects(limit: Int) -> [IDEProject] {
+    private func getAntigravityRecentProjectsSync(limit: Int) -> [IDEProject] {
         // Antigravity 使用类似 VSCode 的数据库结构
         let dbPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(

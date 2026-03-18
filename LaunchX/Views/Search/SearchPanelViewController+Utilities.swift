@@ -421,23 +421,20 @@ extension SearchPanelViewController {
         tableView.reloadData()
 
         // 异步加载进程列表
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let apps = ProcessManager.shared.getRunningApps()
-            let ports = ProcessManager.shared.getListeningPortProcesses()
+        ProcessManager.shared.getListeningPortProcesses { [weak self] ports in
+            guard let self = self,
+                self.isInUtilityMode,
+                self.currentUtilityIdentifier == "kill"
+            else { return }
 
-            DispatchQueue.main.async {
-                guard let self = self,
-                    self.isInUtilityMode,
-                    self.currentUtilityIdentifier == "kill"
-                else { return }
-
-                self.killModeApps = apps
-                self.killModePorts = ports
-                self.killModeAllItems = apps + ports
-                self.killModeFilteredItems = self.killModeAllItems
-                self.reloadKillModeResults()
-            }
+            self.killModePorts = ports
+            self.killModeAllItems = self.killModeApps + ports
+            self.killModeFilteredItems = self.killModeAllItems
+            self.reloadKillModeResults()
         }
+
+        // getRunningApps 是同步的，但因为它只使用 NSWorkspace API，不会阻塞
+        self.killModeApps = ProcessManager.shared.getRunningApps()
     }
 
     /// 刷新 kill 模式结果显示

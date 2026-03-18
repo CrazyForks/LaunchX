@@ -371,27 +371,49 @@ extension SearchPanelViewController {
         // 检测是否为支持的 IDE
         guard let ideType = IDEType.detect(from: item.path) else { return false }
 
-        // 获取该 IDE 的最近项目
-        let projects = IDERecentProjectsService.shared.getRecentProjects(for: ideType, limit: 20)
-        guard !projects.isEmpty else { return false }
+        // 异步获取该 IDE 的最近项目
+        IDERecentProjectsService.shared.getRecentProjects(for: ideType, limit: 20) { [weak self] projects in
+            guard let self = self else { return }
 
-        // 进入 IDE 项目模式
-        isInIDEProjectMode = true
-        currentIDEApp = item
-        currentIDEType = ideType
-        ideProjects = projects
-        filteredIDEProjects = projects
+            guard !projects.isEmpty else {
+                // 没有项目，但仍然可以进入 IDE 模式（显示空列表）
+                self.isInIDEProjectMode = true
+                self.currentIDEApp = item
+                self.currentIDEType = ideType
+                self.ideProjects = []
+                self.filteredIDEProjects = []
 
-        // 更新 UI
-        updateIDEModeUI()
+                // 更新 UI
+                self.updateIDEModeUI()
 
-        // 显示项目列表
-        results = projects.map { $0.toSearchResult() }
-        selectedIndex = 0
-        searchField.stringValue = ""
-        setPlaceholder("搜索项目...")
-        tableView.reloadData()
-        updateVisibility()
+                // 显示空项目列表
+                self.results = []
+                self.selectedIndex = 0
+                self.searchField.stringValue = ""
+                self.setPlaceholder("搜索项目...")
+                self.tableView.reloadData()
+                self.updateVisibility()
+                return
+            }
+
+            // 进入 IDE 项目模式
+            self.isInIDEProjectMode = true
+            self.currentIDEApp = item
+            self.currentIDEType = ideType
+            self.ideProjects = projects
+            self.filteredIDEProjects = projects
+
+            // 更新 UI
+            self.updateIDEModeUI()
+
+            // 显示项目列表
+            self.results = projects.map { $0.toSearchResult() }
+            self.selectedIndex = 0
+            self.searchField.stringValue = ""
+            self.setPlaceholder("搜索项目...")
+            self.tableView.reloadData()
+            self.updateVisibility()
+        }
 
         return true
     }
@@ -837,62 +859,65 @@ extension SearchPanelViewController {
 
         print("SearchPanelViewController: IDE path=\(idePath), type=\(ideType)")
 
-        // 获取该 IDE 的最近项目
-        let projects = IDERecentProjectsService.shared.getRecentProjects(for: ideType, limit: 20)
-        print("SearchPanelViewController: Got \(projects.count) projects")
+        // 异步获取该 IDE 的最近项目
+        IDERecentProjectsService.shared.getRecentProjects(for: ideType, limit: 20) { [weak self] projects in
+            guard let self = self else { return }
+            print("SearchPanelViewController: Got \(projects.count) projects")
 
-        guard !projects.isEmpty else {
-            print("SearchPanelViewController: No projects found, returning")
-            return
+            // 如果没有项目，直接返回
+            guard !projects.isEmpty else {
+                print("SearchPanelViewController: No projects found, returning")
+                return
+            }
+
+            // 创建一个虚拟的 SearchResult 来表示 IDE 应用
+            let icon = NSWorkspace.shared.icon(forFile: idePath)
+            icon.size = NSSize(width: 32, height: 32)
+            let name = FileManager.default.displayName(atPath: idePath)
+                .replacingOccurrences(of: ".app", with: "")
+
+            let ideApp = SearchResult(
+                name: name,
+                path: idePath,
+                icon: icon,
+                isDirectory: true
+            )
+
+            // 如果已经在同一个 IDE 的扩展模式中，忽略重复触发
+            if self.isInIDEProjectMode && self.currentIDEApp?.path == idePath {
+                print("SearchPanelViewController: Already in IDE mode for \(idePath), ignoring")
+                return
+            }
+
+            // 如果在其他扩展模式中，先清理
+            if self.isInAnyExtensionMode {
+                self.cleanupAllExtensionModes()
+            }
+
+            // 进入 IDE 项目模式
+            self.isInIDEProjectMode = true
+            self.currentIDEApp = ideApp
+            self.currentIDEType = ideType
+            self.ideProjects = projects
+            self.filteredIDEProjects = projects
+
+            // 更新 UI
+            self.updateIDEModeUI()
+
+            // 显示项目列表
+            self.results = projects.map { $0.toSearchResult() }
+            self.isShowingRecents = false
+            self.selectedIndex = 0
+            self.searchField.stringValue = ""
+            self.setPlaceholder("搜索项目...")
+            self.tableView.reloadData()
+            self.updateVisibility()
+
+            // 聚焦搜索框
+            self.view.window?.makeFirstResponder(self.searchField)
+
+            print("SearchPanelViewController: IDE mode setup complete, results count=\(self.results.count)")
         }
-
-        // 创建一个虚拟的 SearchResult 来表示 IDE 应用
-        let icon = NSWorkspace.shared.icon(forFile: idePath)
-        icon.size = NSSize(width: 32, height: 32)
-        let name = FileManager.default.displayName(atPath: idePath)
-            .replacingOccurrences(of: ".app", with: "")
-
-        let ideApp = SearchResult(
-            name: name,
-            path: idePath,
-            icon: icon,
-            isDirectory: true
-        )
-
-        // 如果已经在同一个 IDE 的扩展模式中，忽略重复触发
-        if isInIDEProjectMode && currentIDEApp?.path == idePath {
-            print("SearchPanelViewController: Already in IDE mode for \(idePath), ignoring")
-            return
-        }
-
-        // 如果在其他扩展模式中，先清理
-        if isInAnyExtensionMode {
-            cleanupAllExtensionModes()
-        }
-
-        // 进入 IDE 项目模式
-        isInIDEProjectMode = true
-        currentIDEApp = ideApp
-        currentIDEType = ideType
-        ideProjects = projects
-        filteredIDEProjects = projects
-
-        // 更新 UI
-        updateIDEModeUI()
-
-        // 显示项目列表
-        results = projects.map { $0.toSearchResult() }
-        isShowingRecents = false
-        selectedIndex = 0
-        searchField.stringValue = ""
-        setPlaceholder("搜索项目...")
-        tableView.reloadData()
-        updateVisibility()
-
-        // 聚焦搜索框
-        view.window?.makeFirstResponder(searchField)
-
-        print("SearchPanelViewController: IDE mode setup complete, results count=\(results.count)")
     }
 
     /// 处理直接进入网页直达 Query 模式的通知
