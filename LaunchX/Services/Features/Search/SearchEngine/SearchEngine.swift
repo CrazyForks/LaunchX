@@ -59,6 +59,15 @@ final class SearchEngine: ObservableObject {
     private var toolsConfigObserver: NSObjectProtocol?
     private var settingsObserver: NSObjectProtocol?
 
+    // FSEvents 批量处理（磁盘写入优化）
+    private var fsEventQueue: [FSEventsMonitor.FSEvent] = []
+    private var fsEventTimer: Timer?
+
+    // FSEvents 批量处理开关（可通过 UserDefaults 控制）
+    private var fsEventsBatchProcessingEnabled: Bool {
+        return UserDefaults.standard.bool(forKey: "fsEventsBatchProcessingEnabled") != false
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -308,7 +317,10 @@ final class SearchEngine: ObservableObject {
                 }
 
                 // Start file system monitoring
-                self.startMonitoring()
+                // 延迟 5 秒启动，避免启动时的 I/O 响
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                    self?.startMonitoring()
+                }
             }
         }
     }
@@ -407,6 +419,154 @@ final class SearchEngine: ObservableObject {
     }
 
     private func handleFSEvents(_ events: [FSEventsMonitor.FSEvent]) {
+        // 如果批量处理被禁用，立即处理每个事件
+        guard fsEventsBatchProcessingEnabled else {
+            for event in events {
+                switch event.type {
+                case .created, .modified:
+                    addToIndex(path: event.path)
+                case .deleted:
+                    removeFromIndex(path: event.path)
+                case .renamed:
+                    break
+                }
+            }
+            return
+        }
+
+        // 磁盘写入优化: 批量处理文件系统事件
+        // 收集事件到队列，延迟 500ms 后批量处理，减少数据库事务次数
+        fsEventQueue.append(contentsOf: events)
+
+        // 检查队列溢出保护（超过 1000 个事件立即处理）
+        if fsEventQueue.count > 1000 {
+            print("[SearchEngine] FSEvents queue overflow (\(fsEventQueue.count) events), processing immediately")
+            processFSEventsBatch()
+            return
+        }
+
+        // 重置定时器，延迟 500ms 后批量处理
+        fsEventTimer?.invalidate()
+        fsEventTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
+            [weak self] _ in
+            self?.processFSEventsBatch()
+        }
+    }
+
+    /// 批量处理 FSEvents 队列中的事件（磁盘写入优化）
+    private func processFSEventsBatch() {
+        guard !fsEventQueue.isEmpty else { return }
+
+        print("SearchEngine: Processing \(fsEventQueue.count) FSEvents in batch")
+
+        // 分离路径列表
+        var pathsToAdd: [String] = []
+        var pathsToRemove: [String] = []
+
+        for event in fsEventQueue {
+            switch event.type {
+            case .created:
+                pathsToAdd.append(event.path)
+            case .deleted:
+                pathsToRemove.append(event.path)
+            case .modified:
+                // 对于修改，先删除再添加
+                pathsToRemove.append(event.path)
+                pathsToAdd.append(event.path)
+            case .renamed:
+                // 重命名作为创建/删除处理
+                break
+            }
+        }
+
+        // 批量删除（使用单个事务）
+        if !pathsToRemove.isEmpty {
+            database.deleteBatch(pathsToRemove) { success in
+                if success {
+                    for path in pathsToRemove {
+                        self.memoryIndex.remove(path: path)
+                    }
+                    print("SearchEngine: Batch removed \(pathsToRemove.count) paths")
+                }
+            }
+        }
+
+        // 批量添加（收集记录后单个事务插入）
+        if !pathsToAdd.isEmpty {
+            var recordsToAdd: [FileRecord] = []
+            recordsToAdd.reserveCapacity(pathsToAdd.count)
+
+            for path in pathsToAdd {
+                if let record = createFileRecord(path: path) {
+                    recordsToAdd.append(record)
+                }
+            }
+
+            // 批量插入（单个事务）
+            if !recordsToAdd.isEmpty {
+                database.insertBatch(recordsToAdd) { success in
+                    if success {
+                        for record in recordsToAdd {
+                            self.memoryIndex.add(record)
+                        }
+                        print("SearchEngine: Batch inserted \(recordsToAdd.count) records")
+                    }
+                }
+            }
+        }
+
+        // 清空队列
+        fsEventQueue.removeAll()
+        fsEventTimer = nil
+    }
+
+    /// 创建文件记录（辅助方法）
+    private func createFileRecord(path: String) -> FileRecord? {
+        let url = URL(fileURLWithPath: path)
+
+        // Skip if excluded
+        let config = searchConfig
+        if config.excludedPaths.contains(where: { path.hasPrefix($0) }) { return nil }
+
+        let fileName = url.lastPathComponent
+        if config.excludedFolderNames.contains(fileName) { return nil }
+
+        let ext = url.pathExtension.lowercased()
+        if !ext.isEmpty && config.excludedExtensions.contains(ext) { return nil }
+
+        // Create record
+        guard
+            let resourceValues = try? url.resourceValues(forKeys: [
+                .isDirectoryKey, .contentModificationDateKey,
+            ])
+        else { return nil }
+
+        let name = url.deletingPathExtension().lastPathComponent
+        let isApp = ext == "app"
+        let isDir = resourceValues.isDirectory ?? false
+
+        var pinyinFull: String? = nil
+        var pinyinAcronym: String? = nil
+        if name.utf8.count != name.count {
+            pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
+            pinyinAcronym = name.pinyinAcronym.lowercased()
+        }
+
+        let record = FileRecord(
+            name: name,
+            path: path,
+            extension: ext,
+            isApp: isApp,
+            isDirectory: isDir,
+            pinyinFull: pinyinFull,
+            pinyinAcronym: pinyinAcronym,
+            modifiedDate: resourceValues.contentModificationDate
+        )
+
+        return record
+    }
+
+    private func handleFSEvents_immediate(_ events: [FSEventsMonitor.FSEvent]) {
         for event in events {
             switch event.type {
             case .created:
