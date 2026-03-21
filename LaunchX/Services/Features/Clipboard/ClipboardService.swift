@@ -684,8 +684,29 @@ final class ClipboardService: ObservableObject {
     // MARK: - 持久化
 
     /// 防抖动保存：延迟后保存，合并多次操作
-    /// 这是磁盘写入优化的核心功能，大幅减少保存频率
-    /// 可通过 DiskWriteOptimizationSettings.debounceClipboardSaveEnabled 开关控制
+    ///
+    /// **磁盘写入优化的核心功能**
+    ///
+    /// ## 原理
+    /// 使用 Timer 延迟保存机制，将短时间内的多次保存操作合并为一次。
+    /// 每次调用时取消之前的定时器，重新设置延迟，确保只有在操作停止后才真正保存。
+    ///
+    /// ## 优化效果
+    /// - 减少磁盘写入频率：从每次操作都保存，降低到每 2 秒最多保存一次
+    /// - 降低 I/O 开销：合并多次写入，减少文件系统调用
+    /// - 预期效果：剪贴板写入量降低 80-90%
+    ///
+    /// ## 权衡
+    /// - **数据延迟**：最多延迟 2 秒保存数据
+    /// - **崩溃风险**：应用崩溃可能丢失最后 2 秒的数据
+    /// - **缓解措施**：
+    ///   - 应用进入后台时立即保存（applicationDidResignActive）
+    ///   - 应用终止前立即保存（applicationWillTerminate）
+    ///   - 系统休眠前立即保存（NSWorkspace.willSleepNotification）
+    ///
+    /// ## 配置
+    /// 可通过 `DiskWriteOptimizationSettings.debounceClipboardSaveEnabled` 开关控制
+    ///
     private func scheduleSave() {
         let optimizationSettings = DiskWriteOptimizationSettings.shared
 
@@ -746,6 +767,9 @@ final class ClipboardService: ObservableObject {
 
         if let data = try? JSONEncoder().encode(itemsToSave) {
             try? data.write(to: itemsFileURL)
+
+            // 记录磁盘写入量（磁盘写入优化：监控）
+            DiskWriteMonitor.shared.recordWrite(bytes: Int64(data.count))
         }
     }
 

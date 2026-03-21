@@ -413,6 +413,10 @@ final class IndexDatabase {
     // MARK: - WAL Checkpoint 管理
 
     /// 获取 WAL 文件大小（字节）
+    ///
+    /// WAL (Write-Ahead Logging) 是 SQLite 的日志模式，所有写入操作先记录到 WAL 文件，
+    /// 定期通过 checkpoint 操作合并到主数据库文件。
+    ///
     /// - Returns: WAL 文件大小，如果文件不存在返回 0
     func getWALFileSize() -> Int64 {
         let walPath = dbPath + "-wal"
@@ -438,6 +442,37 @@ final class IndexDatabase {
     }
 
     /// 执行手动 checkpoint
+    ///
+    /// **SQLite WAL 优化的核心功能**
+    ///
+    /// ## 原理
+    /// Checkpoint 将 WAL 文件中的更改合并到主数据库文件。
+    /// 通过调整 checkpoint 频率，可以显著减少磁盘写入次数。
+    ///
+    /// ## Checkpoint 模式
+    /// - **PASSIVE**: 被动模式，不阻塞读写，可能无法完全清空 WAL
+    /// - **FULL**: 完整模式，等待所有读者完成，确保 WAL 被清空
+    /// - **RESTART**: 重启模式，清空 WAL 并重置
+    /// - **TRUNCATE**: 截断模式，清空 WAL 并截断文件大小
+    ///
+    /// ## 优化策略
+    /// 1. 将 wal_autocheckpoint 从 1000 提升到 10000 页
+    ///    - 减少自动 checkpoint 频率 90%
+    ///    - 允许 WAL 文件增长到约 40 MB
+    /// 2. 应用空闲时（5分钟）执行 PASSIVE checkpoint
+    ///    - 利用空闲时间合并数据，不影响性能
+    /// 3. WAL 文件超过 100 MB 时强制 TRUNCATE checkpoint
+    ///    - 防止 WAL 文件无限增长
+    ///
+    /// ## 权衡
+    /// - **WAL 文件增大**：从 4 MB 增长到 40-100 MB
+    /// - **崩溃恢复时间**：WAL 越大，恢复时间越长（但仍在毫秒级）
+    /// - **磁盘空间**：需要额外 40-100 MB 空间
+    /// - **优化效果**：预期减少 checkpoint 相关写入 60-70%
+    ///
+    /// ## 配置
+    /// 可通过 `DiskWriteOptimizationSettings.walOptimizationEnabled` 开关控制
+    ///
     /// - Parameter mode: checkpoint 模式（PASSIVE, FULL, RESTART, TRUNCATE）
     /// - Returns: 是否成功
     @discardableResult
@@ -463,6 +498,13 @@ final class IndexDatabase {
                 self.lastCheckpointTime = Date()
 
                 let walSizeAfter = self.getWALFileSize()
+                let bytesWritten = walSizeBefore - walSizeAfter
+
+                // 记录磁盘写入量（checkpoint将WAL合并到主库）
+                if bytesWritten > 0 {
+                    DiskWriteMonitor.shared.recordWrite(bytes: bytesWritten)
+                }
+
                 print("[IndexDatabase] Checkpoint completed: \(walSizeBefore) -> \(walSizeAfter) bytes, total checkpoints: \(self.checkpointCount)")
                 success = true
             } else {

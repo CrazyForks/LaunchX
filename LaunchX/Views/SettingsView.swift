@@ -24,6 +24,11 @@ struct SettingsView: View {
                 .tabItem {
                     Label("高级扩展", systemImage: "sparkles")
                 }
+
+            PerformanceSettingsView()
+                .tabItem {
+                    Label("性能", systemImage: "chart.xyaxis.line")
+                }
         }
         .frame(width: 700, height: 520)
         .padding()
@@ -518,6 +523,200 @@ struct MainHotKeyRecorderPopover: View {
         if let monitor = flagsMonitor {
             NSEvent.removeMonitor(monitor)
             self.flagsMonitor = nil
+        }
+    }
+}
+
+// MARK: - 性能设置视图
+
+struct PerformanceSettingsView: View {
+    @State private var statistics: DiskWriteStatistics?
+    @State private var walStatistics: (walSize: Int64, dbSize: Int64, checkpointCount: Int)?
+    @State private var settings = DiskWriteOptimizationSettings.shared
+    @State private var refreshTimer: Timer?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // 磁盘写入统计
+                GroupBox(label: Text("磁盘写入统计").font(.headline)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let stats = statistics {
+                            // 健康度评分
+                            HStack {
+                                Text("健康度:")
+                                    .frame(width: 100, alignment: .leading)
+                                Text("\(stats.healthScore)分")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(healthColor(score: stats.healthScore))
+                                Text("(\(stats.healthStatus))")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+
+                            Divider()
+
+                            // 统计数据
+                            StatRow(label: "总写入量", value: stats.formattedTotalBytes)
+                            StatRow(label: "当前速率", value: stats.formattedCurrentRate)
+                            StatRow(label: "平均速率", value: stats.formattedAverageRate)
+                            StatRow(label: "运行时长", value: stats.formattedUptime)
+
+                            // WAL 统计
+                            if let wal = walStatistics {
+                                Divider()
+                                StatRow(label: "WAL 文件大小", value: DiskWriteMonitor.shared.formatBytes(wal.walSize))
+                                StatRow(label: "数据库大小", value: DiskWriteMonitor.shared.formatBytes(wal.dbSize))
+                                StatRow(label: "Checkpoint 次数", value: "\(wal.checkpointCount)")
+                            }
+
+                            // 优化建议
+                            if !stats.recommendations.isEmpty {
+                                Divider()
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("优化建议:")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    ForEach(stats.recommendations, id: \.self) { recommendation in
+                                        HStack(alignment: .top, spacing: 6) {
+                                            Text("•")
+                                            Text(recommendation)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 重置按钮
+                            HStack {
+                                Spacer()
+                                Button("重置统计") {
+                                    DiskWriteMonitor.shared.reset()
+                                    refreshStatistics()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        } else {
+                            Text("正在加载统计数据...")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                }
+
+                // 优化开关
+                GroupBox(label: Text("优化选项").font(.headline)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("剪贴板防抖动保存", isOn: Binding(
+                            get: { settings.debounceClipboardSaveEnabled },
+                            set: { newValue in
+                                settings.debounceClipboardSaveEnabled = newValue
+                                settings.save()
+                                self.settings = DiskWriteOptimizationSettings.shared
+                            }
+                        ))
+                        Text("延迟 \(Int(settings.clipboardDebounceInterval)) 秒保存，合并多次操作")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Divider()
+
+                        Toggle("WAL Checkpoint 优化", isOn: Binding(
+                            get: { settings.walOptimizationEnabled },
+                            set: { newValue in
+                                settings.walOptimizationEnabled = newValue
+                                settings.save()
+                                self.settings = DiskWriteOptimizationSettings.shared
+                            }
+                        ))
+                        Text("减少数据库 checkpoint 频率，降低磁盘写入")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Divider()
+
+                        Toggle("FSEvents 批量处理", isOn: Binding(
+                            get: { settings.fsEventsBatchProcessingEnabled },
+                            set: { newValue in
+                                settings.fsEventsBatchProcessingEnabled = newValue
+                                settings.save()
+                                self.settings = DiskWriteOptimizationSettings.shared
+                            }
+                        ))
+                        Text("批量处理文件系统事件，减少数据库写入次数")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Divider()
+
+                        Toggle("性能日志", isOn: Binding(
+                            get: { settings.performanceLoggingEnabled },
+                            set: { newValue in
+                                settings.performanceLoggingEnabled = newValue
+                                settings.save()
+                                self.settings = DiskWriteOptimizationSettings.shared
+                            }
+                        ))
+                        Text("记录详细的性能日志（用于调试）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                }
+            }
+            .padding()
+        }
+        .onAppear {
+            refreshStatistics()
+            startRefreshTimer()
+        }
+        .onDisappear {
+            stopRefreshTimer()
+        }
+    }
+
+    private func refreshStatistics() {
+        statistics = DiskWriteMonitor.shared.getStatistics()
+        walStatistics = IndexDatabase.shared.getWALStatistics()
+    }
+
+    private func startRefreshTimer() {
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            refreshStatistics()
+        }
+    }
+
+    private func stopRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
+    private func healthColor(score: Int) -> Color {
+        if score >= 80 {
+            return .green
+        } else if score >= 60 {
+            return .blue
+        } else if score >= 40 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+}
+
+struct StatRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label + ":")
+                .frame(width: 100, alignment: .leading)
+            Text(value)
+                .fontWeight(.medium)
+            Spacer()
         }
     }
 }
