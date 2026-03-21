@@ -15,6 +15,7 @@ final class ClipboardService: ObservableObject {
     // MARK: - 私有属性
 
     private var monitorTimer: Timer?
+    private var saveTimer: Timer?  // 防抖动保存定时器
     private var lastChangeCount: Int = 0
     private let pasteboard = NSPasteboard.general
 
@@ -69,8 +70,8 @@ final class ClipboardService: ObservableObject {
 
         lastChangeCount = pasteboard.changeCount
 
-        // 使用 Timer 轮询检测剪贴板变化（1秒间隔，平衡响应速度和CPU开销）
-        monitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+        // 使用 Timer 轮询检测剪贴板变化（2.5秒间隔，平衡响应速度和磁盘写入优化）
+        monitorTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) {
             [weak self] _ in
             self?.checkClipboardChange()
         }
@@ -366,8 +367,8 @@ final class ClipboardService: ObservableObject {
         // 执行清理策略
         applyRetentionPolicy()
 
-        // 保存
-        saveItems()
+        // 防抖动保存（延迟 2 秒）
+        scheduleSave()
         updateTotalSize()
 
         // 发送通知
@@ -403,7 +404,7 @@ final class ClipboardService: ObservableObject {
             deleteImageFromDisk(id: item.id)
         }
 
-        saveItems()
+        scheduleSave()
         updateTotalSize()
 
         NotificationCenter.default.post(
@@ -419,7 +420,7 @@ final class ClipboardService: ObservableObject {
             }
         }
 
-        saveItems()
+        scheduleSave()
         updateTotalSize()
 
         NotificationCenter.default.post(
@@ -436,7 +437,7 @@ final class ClipboardService: ObservableObject {
         }
 
         items = pinnedItems
-        saveItems()
+        scheduleSave()
         updateTotalSize()
 
         NotificationCenter.default.post(
@@ -447,7 +448,7 @@ final class ClipboardService: ObservableObject {
     func togglePin(_ item: ClipboardItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].isPinned.toggle()
-            saveItems()
+            scheduleSave()
 
             NotificationCenter.default.post(
                 name: NSNotification.Name("ClipboardItemsDidChange"), object: nil)
@@ -494,8 +495,8 @@ final class ClipboardService: ObservableObject {
         )
         items.insert(movedItem, at: 0)
 
-        // 保存并通知更新
-        saveItems()
+        // 防抖动保存并通知更新
+        scheduleSave()
         NotificationCenter.default.post(
             name: NSNotification.Name("ClipboardItemsDidChange"), object: nil)
     }
@@ -681,6 +682,40 @@ final class ClipboardService: ObservableObject {
     }
 
     // MARK: - 持久化
+
+    /// 防抖动保存：延迟后保存，合并多次操作
+    /// 这是磁盘写入优化的核心功能，大幅减少保存频率
+    /// 可通过 DiskWriteOptimizationSettings.debounceClipboardSaveEnabled 开关控制
+    private func scheduleSave() {
+        let optimizationSettings = DiskWriteOptimizationSettings.shared
+
+        // 如果防抖动功能被禁用，立即保存
+        guard optimizationSettings.debounceClipboardSaveEnabled else {
+            saveItems()
+            return
+        }
+
+        // 取消之前的定时器
+        saveTimer?.invalidate()
+
+        // 创建新的延迟保存定时器
+        let interval = optimizationSettings.clipboardDebounceInterval
+        saveTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) {
+            [weak self] _ in
+            self?.saveItems()
+        }
+    }
+
+    /// 立即保存（用于应用进入后台或终止前）
+    /// 外部可访问，供 AppDelegate 调用
+    func saveImmediately() {
+        // 取消待执行的延迟保存
+        saveTimer?.invalidate()
+        saveTimer = nil
+
+        // 立即保存数据
+        saveItems()
+    }
 
     private func loadItems() {
         guard let data = try? Data(contentsOf: itemsFileURL),

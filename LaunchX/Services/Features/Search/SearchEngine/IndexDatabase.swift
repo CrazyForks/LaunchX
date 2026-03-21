@@ -16,6 +16,15 @@ final class IndexDatabase {
     private var selectAllStmt: OpaquePointer?
     private var selectByPathStmt: OpaquePointer?
 
+    // WAL 监控相关
+    private var dbPath: String = ""
+    private var checkpointCount: Int = 0
+    private var lastCheckpointTime: Date = Date()
+
+    var walOptimizationEnabled: Bool {
+        return DiskWriteOptimizationSettings.shared.walOptimizationEnabled
+    }
+
     private init() {
         openDatabase()
         createTables()
@@ -38,7 +47,7 @@ final class IndexDatabase {
         // Create directory if needed
         try? fileManager.createDirectory(at: appFolder, withIntermediateDirectories: true)
 
-        let dbPath = appFolder.appendingPathComponent("file_index.db").path
+        dbPath = appFolder.appendingPathComponent("file_index.db").path
 
         if sqlite3_open_v2(
             dbPath, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
@@ -50,6 +59,7 @@ final class IndexDatabase {
 
         // Enhanced performance optimizations for 600k+ files
         executeSQL("PRAGMA journal_mode = WAL")  // Write-Ahead Logging for concurrency
+        executeSQL("PRAGMA wal_autocheckpoint = 10000")  // 磁盘写入优化：减少 checkpoint 频率（默认 1000）
         executeSQL("PRAGMA synchronous = NORMAL")  // Balance safety and speed
         executeSQL("PRAGMA cache_size = -128000")  // 128MB cache (increased for large datasets)
         executeSQL("PRAGMA temp_store = MEMORY")  // Temp tables in memory
@@ -400,7 +410,103 @@ final class IndexDatabase {
         return (total, apps, files)
     }
 
-    // MARK: - Helpers
+    // MARK: - WAL Checkpoint 管理
+
+    /// 获取 WAL 文件大小（字节）
+    /// - Returns: WAL 文件大小，如果文件不存在返回 0
+    func getWALFileSize() -> Int64 {
+        let walPath = dbPath + "-wal"
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: walPath),
+              let size = attrs[.size] as? Int64 else {
+            return 0
+        }
+        return size
+    }
+
+    /// 获取主数据库文件大小（字节）
+    func getDatabaseFileSize() -> Int64 {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: dbPath),
+              let size = attrs[.size] as? Int64 else {
+            return 0
+        }
+        return size
+    }
+
+    /// 获取 WAL 统计信息
+    func getWALStatistics() -> (walSize: Int64, dbSize: Int64, checkpointCount: Int) {
+        return (getWALFileSize(), getDatabaseFileSize(), checkpointCount)
+    }
+
+    /// 执行手动 checkpoint
+    /// - Parameter mode: checkpoint 模式（PASSIVE, FULL, RESTART, TRUNCATE）
+    /// - Returns: 是否成功
+    @discardableResult
+    func performCheckpoint(mode: String = "PASSIVE") -> Bool {
+        guard walOptimizationEnabled else {
+            print("[IndexDatabase] WAL optimization disabled, skipping manual checkpoint")
+            return false
+        }
+
+        var success = false
+
+        // 使用异步方式避免死锁
+        dbQueue.async { [weak self] in
+            guard let self = self else { return }
+
+            // 记录 checkpoint 前的 WAL 大小
+            let walSizeBefore = self.getWALFileSize()
+
+            // 执行 checkpoint
+            let sql = "PRAGMA wal_checkpoint(\(mode))"
+            if self.executeSQL(sql) {
+                self.checkpointCount += 1
+                self.lastCheckpointTime = Date()
+
+                let walSizeAfter = self.getWALFileSize()
+                print("[IndexDatabase] Checkpoint completed: \(walSizeBefore) -> \(walSizeAfter) bytes, total checkpoints: \(self.checkpointCount)")
+                success = true
+            } else {
+                print("[IndexDatabase] Checkpoint failed")
+            }
+        }
+        return success
+    }
+
+    /// 检查并在需要时执行强制 checkpoint
+    /// 当 WAL 文件超过 100 MB 时触发
+    func checkAndForceCheckpoint() {
+        guard walOptimizationEnabled else { return }
+
+        let walSize = getWALFileSize()
+        let maxWALSize: Int64 = 100 * 1024 * 1024  // 100 MB
+
+        if walSize > maxWALSize {
+            print("[IndexDatabase] WAL file exceeds 100 MB (\(walSize) bytes), forcing checkpoint")
+            // 使用 TRUNCATE 模式强制截断 WAL 文件
+            performCheckpoint(mode: "TRUNCATE")
+        }
+    }
+
+    /// 应用空闲时的定期 checkpoint（5 分钟间隔调用）
+    func idleCheckpoint() {
+        guard walOptimizationEnabled else { return }
+
+        // 检查距离上次 checkpoint 的时间
+        let timeSinceLastCheckpoint = Date().timeIntervalSince(lastCheckpointTime)
+        if timeSinceLastCheckpoint >= 300 {  // 5 分钟
+            let walSize = getWALFileSize()
+            if walSize > 1024 * 1024 {  // 只有 WAL 超过 1 MB 才执行
+                print("[IndexDatabase] Performing idle checkpoint, WAL size: \(walSize) bytes")
+                performCheckpoint(mode: "PASSIVE")
+            }
+        }
+    }
+
+    /// 重置 checkpoint 计数器
+    func resetCheckpointCount() {
+        checkpointCount = 0
+        lastCheckpointTime = Date()
+    }
 
     private func recordFromStatement(_ stmt: OpaquePointer) -> FileRecord {
         let name = String(cString: sqlite3_column_text(stmt, 1))

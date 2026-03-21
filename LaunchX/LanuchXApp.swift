@@ -50,6 +50,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupSettingsOpenerWindow()
         observeHotKeyChanges()
 
+        // 注册系统休眠通知（磁盘写入优化：确保休眠前保存数据）
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemWillSleep),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+
         // Activation policy and status item setup are handled in checkPermissionsAndSetup
         // 如果需要显示引导页，保持 regular 模式
         // 如果权限已全部授予，再切换到 accessory 模式
@@ -79,6 +87,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 3. 启动时静默检查更新 (不了不了，做一个不打扰的小朋友)
         // UpdateService.shared.checkForUpdates(manual: false)
+    }
+
+    @objc private func systemWillSleep() {
+        print("LaunchX: System will sleep, saving data immediately")
+        // 立即保存剪贴板数据
+        ClipboardService.shared.saveImmediately()
     }
 
     /// 检查是否运行在 App Translocation 模式下
@@ -594,9 +608,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isUpdating: \(isUpdating)"
         )
 
-        // 1. 明确点击“退出”菜单或正在通过 Sparkle 更新，允许退出
+        // 1. 明确点击"退出"菜单或正在通过 Sparkle 更新，允许退出
         if isQuitting || isUpdating {
             print("LaunchX: Explicit quit or Sparkle update, allowing termination")
+
+            // 立即保存剪贴板数据（磁盘写入优化：确保不丢失数据）
+            ClipboardService.shared.saveImmediately()
+
             // 确保停止权限检查定时器，防止干扰退出
             PermissionService.shared.stopPeriodicCheck()
             return .terminateNow
@@ -626,6 +644,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. 其他情况（如系统关机、用户在设置中授予权限后被要求重启）
         // 安排自动重新启动，因为 macOS 对 accessory 模式的菜单栏应用 relaunch 支持不可靠
         print("LaunchX: System initiated termination, scheduling relaunch...")
+
+        // 立即保存剪贴板数据（磁盘写入优化：确保不丢失数据）
+        ClipboardService.shared.saveImmediately()
+
         scheduleRelaunch()
         PermissionService.shared.stopPeriodicCheck()
         return .terminateNow

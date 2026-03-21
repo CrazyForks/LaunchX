@@ -63,9 +63,12 @@ final class SearchEngine: ObservableObject {
     private var fsEventQueue: [FSEventsMonitor.FSEvent] = []
     private var fsEventTimer: Timer?
 
-    // FSEvents 批量处理开关（可通过 UserDefaults 控制）
+    // WAL checkpoint 定时器（磁盘写入优化）
+    private var walCheckpointTimer: Timer?
+
+    // FSEvents 批量处理开关（可通过配置控制）
     private var fsEventsBatchProcessingEnabled: Bool {
-        return UserDefaults.standard.bool(forKey: "fsEventsBatchProcessingEnabled") != false
+        DiskWriteOptimizationSettings.shared.fsEventsBatchProcessingEnabled
     }
 
     // MARK: - Initialization
@@ -75,6 +78,7 @@ final class SearchEngine: ObservableObject {
         setupCustomItemsConfigObserver()
         setupSettingsObserver()
         loadIndexOnStartup()
+        startWALCheckpointTimer()
     }
 
     /// 监听 UserDefaults 变化，刷新缓存的 Settings
@@ -518,6 +522,9 @@ final class SearchEngine: ObservableObject {
         // 清空队列
         fsEventQueue.removeAll()
         fsEventTimer = nil
+
+        // 批量处理完成后，检查是否需要执行 checkpoint（磁盘写入优化）
+        checkAndForceCheckpoint()
     }
 
     /// 创建文件记录（辅助方法）
@@ -658,6 +665,34 @@ final class SearchEngine: ObservableObject {
         removeFromIndex(path: path)
         // 同时清除可能包含该路径的缓存
         searchCache.clear()
+    }
+
+    // MARK: - WAL Checkpoint 管理
+
+    /// 启动 WAL checkpoint 定时器（磁盘写入优化）
+    private func startWALCheckpointTimer() {
+        let settings = DiskWriteOptimizationSettings.shared
+        guard settings.idleCheckpointEnabled else { return }
+
+        // 每5分钟检查一次
+        let interval = settings.idleCheckpointIntervalSeconds
+        walCheckpointTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.performIdleCheckpoint()
+        }
+    }
+
+    /// 执行空闲时的 checkpoint
+    private func performIdleCheckpoint() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.database.idleCheckpoint()
+        }
+    }
+
+    /// 检查并强制执行 checkpoint（当 WAL 文件过大时）
+    private func checkAndForceCheckpoint() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.database.checkAndForceCheckpoint()
+        }
     }
 
     // MARK: - Search
