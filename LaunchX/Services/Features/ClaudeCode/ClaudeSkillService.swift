@@ -37,8 +37,8 @@ final class ClaudeSkillService: ObservableObject {
         repos = store.loadSkillRepos()
     }
 
-    private func persistSkills() {
-        try? store.saveSkills(skills)
+    private func persistSkills() throws {
+        try store.saveSkills(skills)
     }
 
     private func persistRepos() {
@@ -208,36 +208,46 @@ final class ClaudeSkillService: ObservableObject {
     func installSkill(_ discovered: DiscoveredSkill) throws {
         guard let url = URL(string: discovered.rawUrl) else { return }
 
+        let sanitizedDir = sanitizeDirectory(discovered.directory)
+
         // 1. 下载 SKILL.md
         let content = try String(contentsOf: url, encoding: .utf8)
 
         // 2. 保存到本地主副本
-        let localDir = localSkillsDir.appendingPathComponent(discovered.directory)
+        let localDir = localSkillsDir.appendingPathComponent(sanitizedDir)
         try fileManager.createDirectory(at: localDir, withIntermediateDirectories: true)
         let skillFile = localDir.appendingPathComponent("SKILL.md")
         try content.write(to: skillFile, atomically: true, encoding: .utf8)
 
         // 3. symlink 到 ~/.claude/skills/
-        try createSkillLink(discovered.directory)
+        try createSkillLink(sanitizedDir)
 
         // 4. 记录安装信息
         let skill = ClaudeSkill(
             name: discovered.name,
             skillDescription: discovered.description,
-            directory: discovered.directory,
+            directory: sanitizedDir,
             repoOwner: discovered.repoOwner,
             repoName: discovered.repoName,
             repoBranch: discovered.repoBranch,
             isEnabled: true
         )
         skills.append(skill)
-        persistSkills()
+        try persistSkills()
     }
 
     /// 创建 symlink 或复制到 ~/.claude/skills/
     private func createSkillLink(_ directory: String) throws {
-        let targetDir = claudeSkillsDir.appendingPathComponent(directory)
-        let sourceDir = localSkillsDir.appendingPathComponent(directory)
+        // Sanitize: 去掉开头的 skills/ 前缀，避免嵌套 ~/.claude/skills/skills/xxx
+        let sanitizedDir: String
+        if directory.hasPrefix("skills/") {
+            sanitizedDir = String(directory.dropFirst("skills/".count))
+        } else {
+            sanitizedDir = directory
+        }
+
+        let targetDir = claudeSkillsDir.appendingPathComponent(sanitizedDir)
+        let sourceDir = localSkillsDir.appendingPathComponent(sanitizedDir)
 
         // 确保目标目录存在
         try? fileManager.createDirectory(at: claudeSkillsDir, withIntermediateDirectories: true)
@@ -273,7 +283,7 @@ final class ClaudeSkillService: ObservableObject {
 
         // 3. 移除记录
         skills.removeAll { $0.id == skill.id }
-        persistSkills()
+        try persistSkills()
     }
 
     // MARK: - 启用/禁用
@@ -290,7 +300,7 @@ final class ClaudeSkillService: ObservableObject {
             try? fileManager.removeItem(at: targetDir)
         }
 
-        persistSkills()
+        try persistSkills()
     }
 
     // MARK: - 扫描与导入
@@ -349,7 +359,7 @@ final class ClaudeSkillService: ObservableObject {
             isEnabled: true
         )
         skills.append(skill)
-        persistSkills()
+        try? persistSkills()
     }
 
     // MARK: - 同步
@@ -359,5 +369,23 @@ final class ClaudeSkillService: ObservableObject {
         for skill in skills where skill.isEnabled {
             try? createSkillLink(skill.directory)
         }
+    }
+
+    // MARK: - 目录清理
+
+    /// 清理错误的嵌套目录 ~/.claude/skills/skills/
+    func cleanupNestedSkillsDir() {
+        let nestedDir = claudeSkillsDir.appendingPathComponent("skills")
+        if fileManager.fileExists(atPath: nestedDir.path) {
+            try? fileManager.removeItem(at: nestedDir)
+        }
+    }
+
+    /// 去掉开头的 skills/ 前缀
+    private func sanitizeDirectory(_ directory: String) -> String {
+        if directory.hasPrefix("skills/") {
+            return String(directory.dropFirst("skills/".count))
+        }
+        return directory
     }
 }

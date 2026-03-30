@@ -60,9 +60,23 @@ struct McpServerListView: View {
                         ForEach(service.servers) { server in
                             McpServerRowView(
                                 server: server,
-                                onToggle: { service.toggleEnabled(server) },
+                                onToggle: {
+                                    do {
+                                        try service.toggleEnabled(server)
+                                    } catch {
+                                        errorMessage = error.localizedDescription
+                                        showError = true
+                                    }
+                                },
                                 onEdit: { editingServer = server },
-                                onDelete: { service.deleteServer(server) }
+                                onDelete: {
+                                    do {
+                                        try service.deleteServer(server)
+                                    } catch {
+                                        errorMessage = error.localizedDescription
+                                        showError = true
+                                    }
+                                }
                             )
                         }
                     }

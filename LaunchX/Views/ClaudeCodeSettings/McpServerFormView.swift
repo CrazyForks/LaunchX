@@ -157,10 +157,22 @@ struct McpServerFormView: View {
             var updated = existing
             updated.name = name
             updated.serverConfig = config
-            service.updateServer(updated)
+            do {
+                try service.updateServer(updated)
+            } catch {
+                errorMessage = "保存失败：\(error.localizedDescription)"
+                return
+            }
         } else {
             let server = McpServer(name: name, serverConfig: config)
-            service.addServer(server)
+            do {
+                guard try service.addServer(server) == nil else {
+                    return
+                }
+            } catch {
+                errorMessage = "添加失败：\(error.localizedDescription)"
+                return
+            }
         }
         isPresented = false
     }

@@ -110,7 +110,7 @@ struct ProviderPresetView: View {
                             Button("取消") { isPresented = false }
                             Button("添加") {
                                 if !apiKey.isEmpty {
-                                    service.addProvider(from: preset, apiKey: apiKey)
+                                    try? service.addProvider(from: preset, apiKey: apiKey)
                                     isPresented = false
                                 }
                             }

@@ -55,6 +55,9 @@ final class ClaudeDataStore {
         let tempURL = url.deletingLastPathComponent()
             .appendingPathComponent(".tmp_\(UUID().uuidString)")
         try jsonData.write(to: tempURL, options: .atomic)
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
+        }
         try fileManager.moveItem(at: tempURL, to: url)
     }
 

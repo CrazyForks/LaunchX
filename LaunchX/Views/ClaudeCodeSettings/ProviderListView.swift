@@ -102,8 +102,13 @@ struct ProviderListView: View {
     }
 
     private func deleteProvider(_ provider: ClaudeProvider) {
-        if !service.deleteProvider(provider) {
-            errorMessage = "无法删除当前激活的 Provider，请先切换到其他 Provider"
+        do {
+            if try !service.deleteProvider(provider) {
+                errorMessage = "无法删除当前激活的 Provider，请先切换到其他 Provider"
+                showError = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
             showError = true
         }
     }

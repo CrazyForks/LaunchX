@@ -21,8 +21,8 @@ final class ClaudeMcpService: ObservableObject {
         servers = store.loadMcpServers()
     }
 
-    private func persistData() {
-        try? store.saveMcpServers(servers)
+    private func persistData() throws {
+        try store.saveMcpServers(servers)
     }
 
     // MARK: - Claude Code MCP 配置路径
@@ -53,43 +53,43 @@ final class ClaudeMcpService: ObservableObject {
 
     /// 添加 MCP 服务器
     @discardableResult
-    func addServer(_ server: McpServer) -> String? {
+    func addServer(_ server: McpServer) throws -> String? {
         if let error = validateConfig(server.serverConfig) {
             return error
         }
         servers.append(server)
-        persistData()
+        try persistData()
         if server.isEnabled {
-            syncToClaude()
+            try syncToClaude()
         }
         return nil
     }
 
     /// 更新 MCP 服务器
-    func updateServer(_ server: McpServer) {
+    func updateServer(_ server: McpServer) throws {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
         servers[index] = server
-        persistData()
+        try persistData()
         if server.isEnabled {
-            syncToClaude()
+            try syncToClaude()
         }
     }
 
     /// 删除 MCP 服务器
-    func deleteServer(_ server: McpServer) {
+    func deleteServer(_ server: McpServer) throws {
         servers.removeAll { $0.id == server.id }
-        persistData()
-        syncToClaude()
+        try persistData()
+        try syncToClaude()
     }
 
     // MARK: - 启用/禁用
 
     /// 切换 MCP 服务器启用状态
-    func toggleEnabled(_ server: McpServer) {
+    func toggleEnabled(_ server: McpServer) throws {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
         servers[index].isEnabled.toggle()
-        persistData()
-        syncToClaude()
+        try persistData()
+        try syncToClaude()
     }
 
     // MARK: - 同步到 Claude Code
@@ -105,7 +105,7 @@ final class ClaudeMcpService: ObservableObject {
     }
 
     /// 将所有启用的 MCP 服务器同步到 ~/.claude.json
-    func syncToClaude() {
+    func syncToClaude() throws {
         var config = readClaudeJson() ?? [:]
 
         // 构建启用的 MCP 服务器配置
@@ -121,10 +121,8 @@ final class ClaudeMcpService: ObservableObject {
 
         config["mcpServers"] = mcpServers
 
-        guard let jsonData = try? JSONSerialization.data(
-            withJSONObject: config, options: [.prettyPrinted, .sortedKeys]) else {
-            return
-        }
+        let jsonData = try JSONSerialization.data(
+            withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
 
         // 原子写入
         let tempPath = claudeJsonPath.deletingLastPathComponent()
@@ -141,6 +139,7 @@ final class ClaudeMcpService: ObservableObject {
             try fileManager.moveItem(at: tempPath, to: claudeJsonPath)
         } catch {
             try? fileManager.removeItem(at: tempPath)
+            throw error
         }
     }
 
@@ -179,7 +178,7 @@ final class ClaudeMcpService: ObservableObject {
         }
 
         if imported > 0 {
-            persistData()
+            try? persistData()
         }
         return imported
     }

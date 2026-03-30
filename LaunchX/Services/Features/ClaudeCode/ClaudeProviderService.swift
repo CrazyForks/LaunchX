@@ -1,6 +1,24 @@
 import Foundation
 import Combine
 
+/// Provider 切换错误
+enum ProviderSwitchError: LocalizedError {
+    case providerNotFound
+    case settingsWriteFailed(Error)
+    case persistFailed(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .providerNotFound:
+            return "未找到目标 Provider"
+        case .settingsWriteFailed(let error):
+            return "写入配置失败：\(error.localizedDescription)"
+        case .persistFailed(let error):
+            return "保存数据失败：\(error.localizedDescription)"
+        }
+    }
+}
+
 /// Claude Code Provider 管理服务
 @MainActor
 final class ClaudeProviderService: ObservableObject {
@@ -23,8 +41,8 @@ final class ClaudeProviderService: ObservableObject {
         currentProvider = providers.first { $0.isCurrent }
     }
 
-    private func persistData() {
-        try? store.saveProviders(providers)
+    private func persistData() throws {
+        try store.saveProviders(providers)
     }
 
     // MARK: - Claude Code 配置文件路径
@@ -36,7 +54,7 @@ final class ClaudeProviderService: ObservableObject {
     // MARK: - CRUD
 
     /// 添加 Provider
-    func addProvider(_ provider: ClaudeProvider) {
+    func addProvider(_ provider: ClaudeProvider) throws {
         var newProvider = provider
         newProvider.sortIndex = providers.count
         if providers.isEmpty {
@@ -46,31 +64,31 @@ final class ClaudeProviderService: ObservableObject {
         if newProvider.isCurrent {
             currentProvider = newProvider
         }
-        persistData()
+        try persistData()
     }
 
     /// 从预设添加 Provider
-    func addProvider(from preset: ClaudeProviderPreset, apiKey: String) {
+    func addProvider(from preset: ClaudeProviderPreset, apiKey: String) throws {
         let provider = preset.createProvider(apiKey: apiKey)
-        addProvider(provider)
+        try addProvider(provider)
     }
 
     /// 更新 Provider
-    func updateProvider(_ provider: ClaudeProvider) {
+    func updateProvider(_ provider: ClaudeProvider) throws {
         guard let index = providers.firstIndex(where: { $0.id == provider.id }) else { return }
         providers[index] = provider
         if provider.isCurrent {
             currentProvider = provider
-            writeClaudeSettings(provider)
+            try writeClaudeSettings(provider)
         }
-        persistData()
+        try persistData()
     }
 
     /// 删除 Provider
-    func deleteProvider(_ provider: ClaudeProvider) -> Bool {
+    func deleteProvider(_ provider: ClaudeProvider) throws -> Bool {
         guard !provider.isCurrent else { return false }
         providers.removeAll { $0.id == provider.id }
-        persistData()
+        try persistData()
         return true
     }
 
@@ -85,35 +103,51 @@ final class ClaudeProviderService: ObservableObject {
     func switchProvider(to targetProvider: ClaudeProvider) throws {
         guard !targetProvider.isCurrent else { return }
 
-        // 1. Backfill: 读取当前 settings.json 回填到旧 Provider
+        // 1. 保存旧 Provider 的 settingsConfig 快照（用于回滚）
+        let snapshot = providers.map { $0 }
+
+        // 2. Backfill: 读取当前 settings.json 回填到旧 Provider
         backfillCurrentProvider()
 
-        // 2. 备份当前配置
+        // 3. 备份当前配置
         try store.backupClaudeSettings()
 
-        // 3. 更新 isCurrent 标志
+        // 4. 更新 isCurrent 标志
         for i in providers.indices {
             providers[i].isCurrent = (providers[i].id == targetProvider.id)
         }
 
-        // 4. 获取切换目标（更新后的）
+        // 5. 获取切换目标（更新后的）
         guard let activatedProvider = providers.first(where: { $0.id == targetProvider.id }) else {
-            return
+            providers = snapshot
+            throw ProviderSwitchError.providerNotFound
         }
         currentProvider = activatedProvider
 
-        // 5. 写入新配置
-        writeClaudeSettings(activatedProvider)
-
-        // 6. 持久化
-        persistData()
-
-        // 7. 触发 MCP 同步
-        Task { @MainActor in
-            ClaudeMcpService.shared.syncToClaude()
+        // 6. 写入新配置（可能抛出错误）
+        do {
+            try writeClaudeSettings(activatedProvider)
+        } catch {
+            // 回滚：恢复旧 Provider 数据
+            providers = snapshot
+            currentProvider = providers.first { $0.isCurrent }
+            throw ProviderSwitchError.settingsWriteFailed(error)
         }
 
-        // 8. 触发 Skills 同步
+        // 7. 持久化
+        do {
+            try store.saveProviders(providers)
+        } catch {
+            // 持久化失败不影响已写入的 settings.json，但仍抛出错误
+            throw ProviderSwitchError.persistFailed(error)
+        }
+
+        // 8. 触发 MCP 同步
+        Task { @MainActor in
+            try? ClaudeMcpService.shared.syncToClaude()
+        }
+
+        // 9. 触发 Skills 同步
         Task { @MainActor in
             ClaudeSkillService.shared.syncAllEnabled()
         }
@@ -132,7 +166,7 @@ final class ClaudeProviderService: ObservableObject {
     }
 
     /// 原子写入 ~/.claude/settings.json
-    func writeClaudeSettings(_ provider: ClaudeProvider) {
+    func writeClaudeSettings(_ provider: ClaudeProvider) throws {
         // 读取现有配置（保留非 env 字段）
         var existingConfig = readClaudeSettings() ?? [:]
 
@@ -142,19 +176,21 @@ final class ClaudeProviderService: ObservableObject {
         // 剥离内部字段
         let sanitized = sanitizeForLive(existingConfig)
 
-        guard let jsonData = try? JSONSerialization.data(
-            withJSONObject: sanitized, options: [.prettyPrinted, .sortedKeys]) else {
-            return
-        }
+        let jsonData = try JSONSerialization.data(
+            withJSONObject: sanitized, options: [.prettyPrinted, .sortedKeys])
 
         // 原子写入
         let tempPath = claudeSettingsPath.deletingLastPathComponent()
             .appendingPathComponent(".tmp_settings_\(UUID().uuidString)")
         do {
             try jsonData.write(to: tempPath, options: .atomic)
+            if fileManager.fileExists(atPath: claudeSettingsPath.path) {
+                try fileManager.removeItem(at: claudeSettingsPath)
+            }
             try fileManager.moveItem(at: tempPath, to: claudeSettingsPath)
         } catch {
             try? fileManager.removeItem(at: tempPath)
+            throw error
         }
     }
 
@@ -231,7 +267,7 @@ final class ClaudeProviderService: ObservableObject {
         )
         providers.append(defaultProvider)
         currentProvider = defaultProvider
-        persistData()
+        try? persistData()
         return defaultProvider
     }
 
@@ -253,6 +289,6 @@ final class ClaudeProviderService: ObservableObject {
 
         // 回填到当前 Provider
         backfillCurrentProvider()
-        persistData()
+        try? persistData()
     }
 }

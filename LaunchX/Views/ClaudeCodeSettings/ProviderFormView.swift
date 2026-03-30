@@ -286,14 +286,14 @@ struct ProviderFormView: View {
             updated.name = name
             updated.settingsConfig = settingsConfig
             updated.category = category
-            service.updateProvider(updated)
+            try? service.updateProvider(updated)
         } else {
             let provider = ClaudeProvider(
                 name: name,
                 settingsConfig: settingsConfig,
                 category: category
             )
-            service.addProvider(provider)
+            try? service.addProvider(provider)
         }
         isPresented = false
     }
