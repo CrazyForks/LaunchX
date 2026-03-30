@@ -11,33 +11,79 @@ struct McpServerFormView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text(editingServer != nil ? "编辑 MCP 服务器" : "添加 MCP 服务器")
-                .font(.headline)
+        VStack(spacing: 0) {
+            // 标题栏
+            HStack {
+                Image(systemName: "puzzlepiece.extension")
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentColor)
+                Text(editingServer != nil ? "编辑 MCP 服务器" : "添加 MCP 服务器")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
 
-            Form {
-                TextField("名称", text: $name)
+            Divider()
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("服务器配置 (JSON)")
+            // 表单内容
+            VStack(alignment: .leading, spacing: 12) {
+                // 名称
+                HStack(spacing: 8) {
+                    Text("名称")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 36, alignment: .trailing)
+                    TextField("例如：filesystem", text: $name)
+                        .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12))
+                }
+
+                // JSON 配置
+                VStack(alignment: .leading, spacing: 4) {
                     TextEditor(text: $configJson)
-                        .font(.system(size: 12, design: .monospaced))
-                        .frame(height: 120)
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(minHeight: 180)
+                        .padding(8)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
                         )
 
+                    HStack {
+                        Text("JSON 格式的服务器配置")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button("格式化") {
+                            formatJson()
+                        }
+                        .font(.system(size: 11))
+                        .controlSize(.small)
+                    }
+
                     if let error = errorMessage {
-                        Text(error)
-                            .font(.system(size: 11))
-                            .foregroundColor(.red)
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(.system(size: 11))
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
-            .formStyle(.grouped)
+            .padding(16)
 
+            Spacer()
+
+            Divider()
+
+            // 底部按钮
             HStack {
                 Spacer()
                 Button("取消") { isPresented = false }
@@ -48,28 +94,44 @@ struct McpServerFormView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(name.isEmpty || configJson.isEmpty)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .frame(width: 450, height: 400)
+        .frame(width: 480, height: 400)
         .onAppear {
             if let server = editingServer {
                 name = server.name
                 let dict = server.serverConfig.mapValues { $0.value }
                 if let data = try? JSONSerialization.data(
-                    withJSONObject: dict, options: .prettyPrinted),
+                    withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
                    let str = String(data: data, encoding: .utf8) {
                     configJson = str
                 }
             } else {
                 configJson = """
                 {
-                  "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-example"]
+                  "args": [
+                    "-y",
+                    "@modelcontextprotocol/server-filesystem"
+                  ],
+                  "command": "npx"
                 }
                 """
             }
         }
+    }
+
+    private func formatJson() {
+        guard let data = configJson.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              let formatted = try? JSONSerialization.data(
+                withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+              let str = String(data: formatted, encoding: .utf8) else {
+            errorMessage = "无效的 JSON 格式"
+            return
+        }
+        errorMessage = nil
+        configJson = str
     }
 
     private func saveServer() {

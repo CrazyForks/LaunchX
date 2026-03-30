@@ -7,6 +7,16 @@ struct ClaudeCodeSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 标题
+            HStack {
+                Text("Claude Code 设置")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
             // Tab 切换
             HStack(spacing: 0) {
                 ForEach(ClaudeCodeTab.allCases) { tab in
@@ -21,6 +31,7 @@ struct ClaudeCodeSettingsView: View {
                         .padding(.vertical, 8)
                         .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
                         .foregroundColor(selectedTab == tab ? .accentColor : .secondary)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

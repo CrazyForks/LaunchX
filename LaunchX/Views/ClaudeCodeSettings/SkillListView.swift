@@ -17,7 +17,6 @@ struct SkillListView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
 
                 Spacer()
 

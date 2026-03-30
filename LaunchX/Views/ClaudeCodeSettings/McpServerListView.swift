@@ -93,28 +93,26 @@ struct McpServerRowView: View {
     let onToggle: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
-
     var body: some View {
         HStack(spacing: 10) {
-            // 启用开关
-            Toggle("", isOn: Binding(
-                get: { server.isEnabled },
-                set: { _ in onToggle() }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .labelsHidden()
-
             // 类型图标
             Image(systemName: server.serverType == .stdio ? "terminal" : "globe")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .frame(width: 20)
-
             // 信息
             VStack(alignment: .leading, spacing: 2) {
-                Text(server.name)
-                    .font(.system(size: 13, weight: .medium))
+                HStack(spacing: 6) {
+                    Text(server.name)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(server.serverType.displayName)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(3)
+                }
                 Text(server.configSummary)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -122,31 +120,30 @@ struct McpServerRowView: View {
             }
 
             Spacer()
-
-            // 类型标签
-            Text(server.serverType.displayName)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
-
-            // 菜单
-            Menu {
-                Button(action: onEdit) {
-                    Label("编辑", systemImage: "pencil")
-                }
-                Divider()
-                Button(role: .destructive, action: onDelete) {
-                    Label("删除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundColor(.secondary)
+            // 操作按钮 - 直接展示
+            Button(action: onToggle) {
+                Image(systemName: server.isEnabled ? "pause.circle" : "play.circle")
+                    .font(.system(size: 12))
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 24)
+            .buttonStyle(.plain)
+            .foregroundColor(server.isEnabled ? .orange : .green)
+            .help(server.isEnabled ? "禁用" : "启用")
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            .help("编辑")
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.red.opacity(0.7))
+            .help("删除")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -154,7 +154,7 @@ struct ProviderRowView: View {
 
             Spacer()
 
-            // 操作按钮
+            // 操作按钮 - 直接展示在右侧
             if !isCurrent {
                 Button(action: onActivate) {
                     Text("启用")
@@ -164,22 +164,23 @@ struct ProviderRowView: View {
                 .controlSize(.small)
             }
 
-            Menu {
-                Button(action: onEdit) {
-                    Label("编辑", systemImage: "pencil")
-                }
-                if !isCurrent {
-                    Divider()
-                    Button(role: .destructive, action: onDelete) {
-                        Label("删除", systemImage: "trash")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundColor(.secondary)
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 12))
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 24)
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            .help("编辑")
+
+            if !isCurrent {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.red.opacity(0.7))
+                .help("删除")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
