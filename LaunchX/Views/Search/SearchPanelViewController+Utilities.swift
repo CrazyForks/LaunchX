@@ -932,6 +932,18 @@ extension SearchPanelViewController {
             return
         }
 
+        // Claude Code 入口：进入 Claude Code Switcher 模式
+        if item.isClaudeCodeEntry {
+            enterClaudeCodeMode()
+            return
+        }
+
+        // Claude Code 模式：处理选中项（切换 Provider/MCP/Skill）
+        if isInClaudeCodeMode, item.isClaudeCodeItem {
+            handleClaudeCodeItemSelected(item)
+            return
+        }
+
         // 书签：打开书签 URL
         if item.isBookmark {
             BookmarkService.shared.open(

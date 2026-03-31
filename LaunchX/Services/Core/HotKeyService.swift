@@ -209,6 +209,13 @@ class HotKeyService: ObservableObject {
     /// 输入翻译快捷键 ID
     let translateInputHotKeyId: UInt32 = 7
 
+    /// Claude Code Switcher 快捷键触发回调
+    var onClaudeCodeHotKeyPressed: (() -> Void)?
+    /// Claude Code Switcher 快捷键引用
+    var claudeCodeHotKeyRef: EventHotKeyRef?
+    /// Claude Code Switcher 快捷键 ID
+    let claudeCodeHotKeyId: UInt32 = 8
+
     // MARK: - 私有属性
 
     let hotKeySignature: OSType
@@ -327,6 +334,14 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == translateInputHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onTranslateInputHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为 Claude Code Switcher 快捷键
+            if hotKeyID.id == claudeCodeHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onClaudeCodeHotKeyPressed?()
                 }
                 return noErr
             }

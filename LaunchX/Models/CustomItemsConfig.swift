@@ -150,4 +150,5 @@ extension Notification.Name {
     static let enterClipboardModeDirectly = Notification.Name("enterClipboardModeDirectly")
     static let enterMemeModeDirectly = Notification.Name("enterMemeModeDirectly")
     static let enterFavoriteModeDirectly = Notification.Name("enterFavoriteModeDirectly")
+    static let enterClaudeCodeModeDirectly = Notification.Name("enterClaudeCodeModeDirectly")
 }

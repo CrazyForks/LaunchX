@@ -60,6 +60,12 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             return
         }
 
+        // Claude Code 模式：搜索过滤
+        if isInClaudeCodeMode {
+            filterClaudeCodeItems(query: query)
+            return
+        }
+
         // 普通模式：搜索应用和文件
         performSearch(query)
 

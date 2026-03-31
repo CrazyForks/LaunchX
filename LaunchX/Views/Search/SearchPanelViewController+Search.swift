@@ -115,6 +115,9 @@ extension SearchPanelViewController {
         // 检查是否匹配 2FA 别名（用于显示 2FA 入口）
         let twoFAEntryResult = check2FAAliasMatch(query: query)
 
+        // 检查是否匹配 Claude Code Switcher 别名
+        let claudeCodeEntryResult = checkClaudeCodeAliasMatch(query: query)
+
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
@@ -127,6 +130,9 @@ extension SearchPanelViewController {
         }
         if let twoFAEntry = twoFAEntryResult {
             finalResults.append(twoFAEntry)
+        }
+        if let claudeCodeEntry = claudeCodeEntryResult {
+            finalResults.append(claudeCodeEntry)
         }
 
         if sortedResults.isEmpty {
@@ -205,6 +211,35 @@ extension SearchPanelViewController {
             isDirectory: false,
             displayAlias: settings.alias,
             is2FAEntry: true
+        )
+    }
+
+    /// 检查 Claude Code Switcher 别名匹配
+    /// - Parameter query: 搜索查询
+    /// - Returns: 如果匹配，返回 Claude Code Switcher 入口 SearchResult
+    func checkClaudeCodeAliasMatch(query: String) -> SearchResult? {
+        let settings = ClaudeCodeSwitcherSettings.load()
+        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
+
+        let queryLower = query.lowercased()
+        let aliasLower = settings.alias.lowercased()
+
+        // 检查是否匹配别名（前缀匹配或完全匹配）
+        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
+
+        // 创建 Claude Code 入口结果
+        let ccIcon =
+            NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Claude Code")
+            ?? NSImage()
+        ccIcon.size = NSSize(width: 32, height: 32)
+
+        return SearchResult(
+            name: "Claude Code",
+            path: "cc-entry",
+            icon: ccIcon,
+            isDirectory: false,
+            displayAlias: settings.alias,
+            isClaudeCodeEntry: true
         )
     }
 

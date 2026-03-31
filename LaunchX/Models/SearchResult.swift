@@ -49,6 +49,12 @@ struct SearchResult: Identifiable, Hashable {
     let reminderURL: URL?  // 提醒事项关联的 URL
     let processStats: String?  // 进程统计信息（CPU、内存等，靠右显示）
 
+    // Claude Code Switcher 相关字段
+    let isClaudeCodeEntry: Bool  // 是否为 Claude Code Switcher 入口
+    let isClaudeCodeItem: Bool  // 是否为 Claude Code Switcher 子项（Provider/MCP/Skill）
+    let claudeCodeItemType: ClaudeCodeItemType?  // 子项类型
+    let claudeCodeItemId: String?  // 关联的实体 ID（Provider/MCP/Skill 的唯一标识）
+
     init(
         id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
@@ -58,7 +64,9 @@ struct SearchResult: Identifiable, Hashable {
         supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
         isSectionHeader: Bool = false, isReminder: Bool = false,
         reminderIdentifier: String? = nil, reminderColor: NSColor? = nil,
-        reminderURL: URL? = nil, processStats: String? = nil
+        reminderURL: URL? = nil, processStats: String? = nil,
+        isClaudeCodeEntry: Bool = false, isClaudeCodeItem: Bool = false,
+        claudeCodeItemType: ClaudeCodeItemType? = nil, claudeCodeItemId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -84,6 +92,10 @@ struct SearchResult: Identifiable, Hashable {
         self.reminderColor = reminderColor
         self.reminderURL = reminderURL
         self.processStats = processStats
+        self.isClaudeCodeEntry = isClaudeCodeEntry
+        self.isClaudeCodeItem = isClaudeCodeItem
+        self.claudeCodeItemType = claudeCodeItemType
+        self.claudeCodeItemId = claudeCodeItemId
     }
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {
@@ -93,6 +105,14 @@ struct SearchResult: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
+}
+
+// MARK: - Claude Code Item Type
+
+enum ClaudeCodeItemType: String, Codable {
+    case provider
+    case mcp
+    case skill
 }
 
 extension SearchResult {

@@ -31,10 +31,10 @@ class SearchPanelViewController: NSViewController {
     let searchEngine = SearchEngine.shared
     var isShowingRecents: Bool = false  // 是否正在显示最近使用
 
-    /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA等）
+    /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA、Claude Code等）
     var isInAnyExtensionMode: Bool {
         return isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode
+            || isInBookmarkMode || isIn2FAMode || isInClaudeCodeMode
     }
 
     // IDE 项目模式状态
@@ -65,6 +65,9 @@ class SearchPanelViewController: NSViewController {
     // 2FA 短信模式状态
     var isIn2FAMode: Bool = false
     var twoFAResults: [TwoFactorCodeItem] = []
+
+    // Claude Code Switcher 模式状态
+    var isInClaudeCodeMode: Bool = false
 
     // IP 查询结果
     var ipQueryResults: [(label: String, ip: String)] = []
@@ -357,6 +360,14 @@ class SearchPanelViewController: NSViewController {
             object: nil
         )
 
+        // 监听直接进入 Claude Code 模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnterClaudeCodeModeDirectly),
+            name: .enterClaudeCodeModeDirectly,
+            object: nil
+        )
+
         // 监听提醒事项变更
         NotificationCenter.default.addObserver(
             self,
@@ -535,6 +546,13 @@ class SearchPanelViewController: NSViewController {
         if isIn2FAMode {
             isIn2FAMode = false
             twoFAResults = []
+            restoreNormalModeUI()
+            setPlaceholder("搜索应用或文档...")
+        }
+
+        // 如果在 Claude Code 模式，先恢复普通模式 UI
+        if isInClaudeCodeMode {
+            isInClaudeCodeMode = false
             restoreNormalModeUI()
             setPlaceholder("搜索应用或文档...")
         }

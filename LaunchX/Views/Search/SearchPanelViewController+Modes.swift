@@ -1352,4 +1352,361 @@ extension SearchPanelViewController {
         resetState()
     }
 
+    // MARK: - Claude Code Switcher 模式
+
+    /// 直接进入 Claude Code Switcher 模式（由快捷键触发）
+    @objc func handleEnterClaudeCodeModeDirectly() {
+        PanelManager.shared.showPanel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.enterClaudeCodeMode()
+        }
+    }
+
+    /// 进入 Claude Code Switcher 模式
+    func enterClaudeCodeMode() {
+        // 如果在其他扩展模式中，先清理
+        if isInAnyExtensionMode && !isInClaudeCodeMode {
+            cleanupAllExtensionModes()
+        }
+
+        isInClaudeCodeMode = true
+        updateClaudeCodeModeUI()
+        loadClaudeCodeItems()
+
+        searchField.stringValue = ""
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    /// 更新 Claude Code Switcher 模式 UI
+    func updateClaudeCodeModeUI() {
+        setPlaceholder("搜索 Provider / MCP / Skills...")
+    }
+
+    /// 加载 Claude Code 项目列表
+    func loadClaudeCodeItems() {
+        var items: [SearchResult] = []
+
+        // Provider 分组
+        let providers = ClaudeProviderService.shared.providers
+        let currentProviderId = ClaudeProviderService.shared.currentProvider?.id
+
+        let providerHeaderIcon =
+            NSImage(systemSymbolName: "server.rack", accessibilityDescription: "Provider")
+            ?? NSImage()
+        providerHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(
+            SearchResult(
+                name: "Provider",
+                path: "",
+                icon: providerHeaderIcon,
+                isDirectory: false,
+                isSectionHeader: true
+            ))
+
+        for provider in providers {
+            let isActive = provider.id == currentProviderId
+            let icon =
+                isActive
+                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage())
+                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            icon.size = NSSize(width: 32, height: 32)
+
+            items.append(
+                SearchResult(
+                    name: provider.name,
+                    path: isActive ? "active" : "",
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: isActive ? "当前" : nil,
+                    isClaudeCodeItem: true,
+                    claudeCodeItemType: .provider,
+                    claudeCodeItemId: provider.id.uuidString
+                ))
+        }
+
+        // MCP 分组
+        let mcpServers = ClaudeMcpService.shared.servers
+
+        let mcpHeaderIcon =
+            NSImage(systemSymbolName: "link.circle", accessibilityDescription: "MCP")
+            ?? NSImage()
+        mcpHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(
+            SearchResult(
+                name: "MCP 服务器",
+                path: "",
+                icon: mcpHeaderIcon,
+                isDirectory: false,
+                isSectionHeader: true
+            ))
+
+        for server in mcpServers {
+            let icon =
+                server.isEnabled
+                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage())
+                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            icon.size = NSSize(width: 32, height: 32)
+
+            items.append(
+                SearchResult(
+                    name: server.name,
+                    path: server.isEnabled ? "active" : "",
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: server.isEnabled ? "已启用" : "已禁用",
+                    isClaudeCodeItem: true,
+                    claudeCodeItemType: .mcp,
+                    claudeCodeItemId: server.id.uuidString
+                ))
+        }
+
+        // Skills 分组
+        let skills = ClaudeSkillService.shared.skills
+
+        let skillHeaderIcon =
+            NSImage(systemSymbolName: "star.circle", accessibilityDescription: "Skills")
+            ?? NSImage()
+        skillHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(
+            SearchResult(
+                name: "Skills",
+                path: "",
+                icon: skillHeaderIcon,
+                isDirectory: false,
+                isSectionHeader: true
+            ))
+
+        for skill in skills {
+            let icon =
+                skill.isEnabled
+                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage())
+                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            icon.size = NSSize(width: 32, height: 32)
+
+            items.append(
+                SearchResult(
+                    name: skill.name,
+                    path: skill.isEnabled ? "active" : "",
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: skill.isEnabled ? "已启用" : "已禁用",
+                    isClaudeCodeItem: true,
+                    claudeCodeItemType: .skill,
+                    claudeCodeItemId: skill.id.uuidString
+                ))
+        }
+
+        results = items
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            // 选中第一个非分组标题的项
+            for i in results.indices {
+                if !results[i].isSectionHeader {
+                    selectedIndex = i
+                    break
+                }
+            }
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 在 Claude Code 模式中搜索过滤
+    func filterClaudeCodeItems(query: String) {
+        guard isInClaudeCodeMode else { return }
+
+        if query.isEmpty {
+            loadClaudeCodeItems()
+            return
+        }
+
+        let queryLower = query.lowercased()
+
+        var items: [SearchResult] = []
+
+        // Provider 过滤
+        let providers = ClaudeProviderService.shared.providers.filter {
+            $0.name.lowercased().contains(queryLower)
+        }
+        let currentProviderId = ClaudeProviderService.shared.currentProvider?.id
+
+        if !providers.isEmpty {
+            let providerHeaderIcon =
+                NSImage(systemSymbolName: "server.rack", accessibilityDescription: "Provider")
+                ?? NSImage()
+            providerHeaderIcon.size = NSSize(width: 32, height: 32)
+            items.append(
+                SearchResult(
+                    name: "Provider", path: "", icon: providerHeaderIcon,
+                    isDirectory: false, isSectionHeader: true))
+
+            for provider in providers {
+                let isActive = provider.id == currentProviderId
+                let icon =
+                    isActive
+                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                        ?? NSImage())
+                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                icon.size = NSSize(width: 32, height: 32)
+                items.append(
+                    SearchResult(
+                        name: provider.name, path: isActive ? "active" : "", icon: icon,
+                        isDirectory: false, displayAlias: isActive ? "当前" : nil,
+                        isClaudeCodeItem: true, claudeCodeItemType: .provider,
+                        claudeCodeItemId: provider.id.uuidString))
+            }
+        }
+
+        // MCP 过滤
+        let mcpServers = ClaudeMcpService.shared.servers.filter {
+            $0.name.lowercased().contains(queryLower)
+        }
+
+        if !mcpServers.isEmpty {
+            let mcpHeaderIcon =
+                NSImage(systemSymbolName: "link.circle", accessibilityDescription: "MCP")
+                ?? NSImage()
+            mcpHeaderIcon.size = NSSize(width: 32, height: 32)
+            items.append(
+                SearchResult(
+                    name: "MCP 服务器", path: "", icon: mcpHeaderIcon,
+                    isDirectory: false, isSectionHeader: true))
+
+            for server in mcpServers {
+                let icon =
+                    server.isEnabled
+                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                        ?? NSImage())
+                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                icon.size = NSSize(width: 32, height: 32)
+                items.append(
+                    SearchResult(
+                        name: server.name, path: server.isEnabled ? "active" : "", icon: icon,
+                        isDirectory: false, displayAlias: server.isEnabled ? "已启用" : "已禁用",
+                        isClaudeCodeItem: true, claudeCodeItemType: .mcp,
+                        claudeCodeItemId: server.id.uuidString))
+            }
+        }
+
+        // Skills 过滤
+        let skills = ClaudeSkillService.shared.skills.filter {
+            $0.name.lowercased().contains(queryLower)
+        }
+
+        if !skills.isEmpty {
+            let skillHeaderIcon =
+                NSImage(systemSymbolName: "star.circle", accessibilityDescription: "Skills")
+                ?? NSImage()
+            skillHeaderIcon.size = NSSize(width: 32, height: 32)
+            items.append(
+                SearchResult(
+                    name: "Skills", path: "", icon: skillHeaderIcon,
+                    isDirectory: false, isSectionHeader: true))
+
+            for skill in skills {
+                let icon =
+                    skill.isEnabled
+                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                        ?? NSImage())
+                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                icon.size = NSSize(width: 32, height: 32)
+                items.append(
+                    SearchResult(
+                        name: skill.name, path: skill.isEnabled ? "active" : "", icon: icon,
+                        isDirectory: false, displayAlias: skill.isEnabled ? "已启用" : "已禁用",
+                        isClaudeCodeItem: true, claudeCodeItemType: .skill,
+                        claudeCodeItemId: skill.id.uuidString))
+            }
+        }
+
+        results = items
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            for i in results.indices {
+                if !results[i].isSectionHeader {
+                    selectedIndex = i
+                    break
+                }
+            }
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 处理 Claude Code 模式中的选中项
+    func handleClaudeCodeItemSelected(_ item: SearchResult) {
+        guard item.isClaudeCodeItem, let itemType = item.claudeCodeItemType,
+              let itemIdStr = item.claudeCodeItemId,
+              let itemUUID = UUID(uuidString: itemIdStr)
+        else { return }
+
+        switch itemType {
+        case .provider:
+            // 切换 Provider
+            guard let provider = ClaudeProviderService.shared.providers.first(where: {
+                $0.id == itemUUID
+            }) else { return }
+            do {
+                try ClaudeProviderService.shared.switchProvider(to: provider)
+            } catch {
+                print("Claude Code Switcher: 切换 Provider 失败: \(error)")
+            }
+            // 切换后刷新列表
+            loadClaudeCodeItems()
+
+        case .mcp:
+            // 切换 MCP 启用/禁用
+            guard let server = ClaudeMcpService.shared.servers.first(where: {
+                $0.id == itemUUID
+            }) else { return }
+            do {
+                try ClaudeMcpService.shared.toggleEnabled(server)
+            } catch {
+                print("Claude Code Switcher: 切换 MCP 失败: \(error)")
+            }
+            loadClaudeCodeItems()
+
+        case .skill:
+            // 切换 Skill 启用/禁用
+            guard let skill = ClaudeSkillService.shared.skills.first(where: {
+                $0.id == itemUUID
+            }) else { return }
+            do {
+                try ClaudeSkillService.shared.toggleEnabled(skill)
+            } catch {
+                print("Claude Code Switcher: 切换 Skill 失败: \(error)")
+            }
+            loadClaudeCodeItems()
+        }
+    }
+
+    /// 退出 Claude Code Switcher 模式
+    func exitClaudeCodeMode() {
+        guard isInClaudeCodeMode else { return }
+
+        isInClaudeCodeMode = false
+
+        // 恢复 UI
+        restoreNormalModeUI()
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
+    }
+
 }

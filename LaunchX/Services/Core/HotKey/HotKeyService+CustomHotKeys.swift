@@ -468,4 +468,49 @@ extension HotKeyService {
         }
     }
 
+    // MARK: - Claude Code Switcher 快捷键
+
+    /// 注册 Claude Code Switcher 快捷键
+    func registerClaudeCodeHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterClaudeCodeHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: claudeCodeHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            claudeCodeHotKeyRef = hotKeyRef
+            print("HotKeyService: Registered ClaudeCode HotKey (Code: \(keyCode), Mods: \(modifiers))")
+        } else {
+            print("HotKeyService: Failed to register ClaudeCode hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销 Claude Code Switcher 快捷键
+    func unregisterClaudeCodeHotKey() {
+        if let ref = claudeCodeHotKeyRef {
+            UnregisterEventHotKey(ref)
+            claudeCodeHotKeyRef = nil
+            print("HotKeyService: Unregistered ClaudeCode HotKey")
+        }
+    }
+
+    /// 加载 Claude Code Switcher 快捷键设置
+    func loadClaudeCodeHotKey() {
+        let settings = ClaudeCodeSwitcherSettings.load()
+        if settings.hotKeyCode != 0 {
+            registerClaudeCodeHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
 }
