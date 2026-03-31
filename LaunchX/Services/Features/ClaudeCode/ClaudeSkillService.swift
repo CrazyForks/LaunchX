@@ -88,66 +88,103 @@ final class ClaudeSkillService: ObservableObject {
         var isInstalled: Bool = false
     }
 
-    /// 从仓库发现可用 Skills
+    /// 从仓库发现可用 Skills（并行请求 + 增量更新）
     func discoverSkills() async {
         isLoading = true
         defer { isLoading = false }
 
-        var discovered: [DiscoveredSkill] = []
+        discoveredSkills = []
 
-        for repo in repos where repo.isEnabled {
-            // GitHub API: 获取仓库中包含 SKILL.md 的文件
-            let apiUrl = "https://api.github.com/repos/\(repo.owner)/\(repo.name)/git/trees/\(repo.branch)?recursive=1"
+        let enabledRepos = repos.filter { $0.isEnabled }
+        guard !enabledRepos.isEmpty else { return }
 
-            guard let url = URL(string: apiUrl) else { continue }
-
-            var request = URLRequest(url: url)
-            request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
-            request.timeoutInterval = 15
-
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse,
-                      httpResponse.statusCode == 200 else {
-                    continue
+        await withTaskGroup(of: [DiscoveredSkill].self) { group in
+            for repo in enabledRepos {
+                group.addTask { [weak self] in
+                    guard let self = self else { return [] }
+                    return await self.discoverSkillsFromRepo(repo)
                 }
+            }
 
-                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let tree = json["tree"] as? [[String: Any]] else {
-                    continue
-                }
+            // 每完成一个仓库就增量更新 UI
+            for await repoSkills in group {
+                discoveredSkills.append(contentsOf: repoSkills)
+                discoveredSkills.sort { $0.name.lowercased() < $1.name.lowercased() }
+            }
+        }
+    }
 
-                // 查找包含 SKILL.md 的目录
-                let skillFiles = tree.filter { item in
-                    (item["path"] as? String)?.hasSuffix("SKILL.md") == true
-                }
+    /// 从单个仓库发现 Skills
+    private func discoverSkillsFromRepo(_ repo: SkillRepo) async -> [DiscoveredSkill] {
+        let apiUrl = "https://api.github.com/repos/\(repo.owner)/\(repo.name)/git/trees/\(repo.branch)?recursive=1"
 
-                for file in skillFiles {
-                    guard let path = file["path"] as? String else { continue }
-                    let directory = path.replacingOccurrences(of: "/SKILL.md", with: "")
-                    let rawUrl = "https://raw.githubusercontent.com/\(repo.owner)/\(repo.name)/\(repo.branch)/\(path)"
+        guard let url = URL(string: apiUrl) else { return [] }
 
-                    // 尝试获取 SKILL.md 内容来提取名称和描述
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            print("ClaudeSkillService: Failed to fetch tree for \(repo.owner)/\(repo.name): \(error.localizedDescription)")
+            return []
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else { return [] }
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 403 {
+                print("ClaudeSkillService: GitHub API rate limit exceeded for \(repo.owner)/\(repo.name) (HTTP 403)")
+            } else {
+                print("ClaudeSkillService: GitHub API returned \(httpResponse.statusCode) for \(repo.owner)/\(repo.name)")
+            }
+            return []
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tree = json["tree"] as? [[String: Any]] else {
+            print("ClaudeSkillService: Failed to parse tree JSON for \(repo.owner)/\(repo.name)")
+            return []
+        }
+
+        let skillFiles = tree.filter { item in
+            (item["path"] as? String)?.hasSuffix("SKILL.md") == true
+        }
+
+        // 捕获当前已安装 skills 快照，避免在子 Task 中跨 actor 访问
+        let currentSkills = self.skills
+
+        // 并行下载所有 SKILL.md 内容
+        var repoSkills: [DiscoveredSkill] = await withTaskGroup(of: DiscoveredSkill?.self) { group in
+            for file in skillFiles {
+                guard let path = file["path"] as? String else { continue }
+                let directory = path.replacingOccurrences(of: "/SKILL.md", with: "")
+                let rawUrl = "https://raw.githubusercontent.com/\(repo.owner)/\(repo.name)/\(repo.branch)/\(path)"
+
+                group.addTask { [weak self] in
+                    guard let self = self else { return nil }
+
                     var skillName = directory.components(separatedBy: "/").last ?? directory
                     var skillDesc = ""
 
                     if let contentUrl = URL(string: rawUrl) {
                         if let contentData = try? await URLSession.shared.data(from: contentUrl).0,
                            let content = String(data: contentData, encoding: .utf8) {
-                            // 解析 YAML frontmatter
-                            if let metadata = parseYAMLFrontmatter(content) {
+                            if let metadata = self.parseYAMLFrontmatter(content) {
                                 skillName = metadata.name ?? skillName
                                 skillDesc = metadata.description ?? ""
                             }
                         }
                     }
 
-                    let sanitizedDir = sanitizeDirectory(directory)
-                    let isInstalled = skills.contains(where: {
+                    let sanitizedDir = self.sanitizeDirectory(directory)
+                    let isInstalled = currentSkills.contains(where: {
                         $0.repoOwner == repo.owner && $0.repoName == repo.name && $0.directory == sanitizedDir
                     })
 
-                    discovered.append(DiscoveredSkill(
+                    return DiscoveredSkill(
                         name: skillName,
                         description: skillDesc,
                         directory: directory,
@@ -156,14 +193,21 @@ final class ClaudeSkillService: ObservableObject {
                         repoBranch: repo.branch,
                         rawUrl: rawUrl,
                         isInstalled: isInstalled
-                    ))
+                    )
                 }
-            } catch {
-                continue
             }
+
+            var results: [DiscoveredSkill] = []
+            for await skill in group {
+                if let skill = skill {
+                    results.append(skill)
+                }
+            }
+            return results
         }
 
-        discoveredSkills = discovered
+        print("ClaudeSkillService: Discovered \(repoSkills.count) skills from \(repo.owner)/\(repo.name)")
+        return repoSkills
     }
 
     // MARK: - YAML Frontmatter 解析
@@ -173,7 +217,7 @@ final class ClaudeSkillService: ObservableObject {
         let description: String?
     }
 
-    private func parseYAMLFrontmatter(_ content: String) -> SkillMetadata? {
+    nonisolated private func parseYAMLFrontmatter(_ content: String) -> SkillMetadata? {
         guard content.hasPrefix("---") else { return nil }
 
         let lines = content.components(separatedBy: "\n")
@@ -392,7 +436,7 @@ final class ClaudeSkillService: ObservableObject {
     }
 
     /// 去掉开头的 skills/ 前缀
-    private func sanitizeDirectory(_ directory: String) -> String {
+    nonisolated private func sanitizeDirectory(_ directory: String) -> String {
         if directory.hasPrefix("skills/") {
             return String(directory.dropFirst("skills/".count))
         }

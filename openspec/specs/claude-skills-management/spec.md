@@ -22,7 +22,7 @@
 
 #### Scenario: 默认仓库初始化
 - **WHEN** 首次使用 Skills 功能
-- **THEN** 系统 SHALL 自动初始化默认仓库列表：anthropics/skills、ComposioHQ/awesome-claude-skills 等
+- **THEN** 系统 SHALL 自动初始化默认仓库列表：anthropics/skills 等
 
 #### Scenario: 添加自定义仓库
 - **WHEN** 用户输入 GitHub 仓库的 owner 和 name 并添加

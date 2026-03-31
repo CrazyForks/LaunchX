@@ -30,7 +30,6 @@ struct SkillRepo: Identifiable, Codable, Equatable {
 
     /// 默认仓库列表
     static let defaults: [SkillRepo] = [
-        SkillRepo(owner: "anthropics", name: "skills"),
-        SkillRepo(owner: "ComposioHQ", name: "awesome-claude-skills"),
+        SkillRepo(owner: "anthropics", name: "skills")
     ]
 }

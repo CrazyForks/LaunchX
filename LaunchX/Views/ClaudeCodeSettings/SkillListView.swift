@@ -36,6 +36,21 @@ struct SkillListView: View {
                     .disabled(service.isLoading)
                 }
 
+                if selectedTab == .installed {
+                    Button(action: {
+                        let unmanaged = service.scanUnmanagedSkills()
+                        for skill in unmanaged {
+                            try? service.importSkill(skill)
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("从 Claude 导入")
+                        }
+                        .font(.system(size: 12))
+                    }
+                }
+
                 Button(action: { showingRepoSettings = true }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 12))
