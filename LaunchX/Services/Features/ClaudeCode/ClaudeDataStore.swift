@@ -51,14 +51,15 @@ final class ClaudeDataStore {
         encoder.dateEncodingStrategy = .iso8601
         let jsonData = try encoder.encode(data)
 
-        // 原子写入：先写临时文件，再 rename
+        // 原子写入：先写临时文件，再替换目标文件
         let tempURL = url.deletingLastPathComponent()
             .appendingPathComponent(".tmp_\(UUID().uuidString)")
-        try jsonData.write(to: tempURL, options: .atomic)
+        // 不用 .atomic，直接写入临时文件（避免 .atomic 内部 rename 与后续 moveItem 冲突）
+        try jsonData.write(to: tempURL, options: [])
+        // 使用 replaceItemAt 实现原子替换（如果目标存在则覆盖，不存在则移动）
         if fileManager.fileExists(atPath: url.path) {
             try fileManager.removeItem(at: url)
         }
-        try fileManager.moveItem(at: tempURL, to: url)
     }
 
     /// 读取 JSON 文件

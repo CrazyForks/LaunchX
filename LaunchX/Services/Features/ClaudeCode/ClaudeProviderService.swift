@@ -183,11 +183,12 @@ final class ClaudeProviderService: ObservableObject {
         let tempPath = claudeSettingsPath.deletingLastPathComponent()
             .appendingPathComponent(".tmp_settings_\(UUID().uuidString)")
         do {
-            try jsonData.write(to: tempPath, options: .atomic)
+            try jsonData.write(to: tempPath, options: [])
             if fileManager.fileExists(atPath: claudeSettingsPath.path) {
-                try fileManager.removeItem(at: claudeSettingsPath)
+                _ = try? fileManager.replaceItemAt(claudeSettingsPath, withItemAt: tempPath)
+            } else {
+                try fileManager.moveItem(at: tempPath, to: claudeSettingsPath)
             }
-            try fileManager.moveItem(at: tempPath, to: claudeSettingsPath)
         } catch {
             try? fileManager.removeItem(at: tempPath)
             throw error

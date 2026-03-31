@@ -132,11 +132,12 @@ final class ClaudeMcpService: ObservableObject {
             let dir = claudeJsonPath.deletingLastPathComponent()
             try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
 
-            try jsonData.write(to: tempPath, options: .atomic)
+            try jsonData.write(to: tempPath, options: [])
             if fileManager.fileExists(atPath: claudeJsonPath.path) {
-                try fileManager.removeItem(at: claudeJsonPath)
+                _ = try? fileManager.replaceItemAt(claudeJsonPath, withItemAt: tempPath)
+            } else {
+                try fileManager.moveItem(at: tempPath, to: claudeJsonPath)
             }
-            try fileManager.moveItem(at: tempPath, to: claudeJsonPath)
         } catch {
             try? fileManager.removeItem(at: tempPath)
             throw error

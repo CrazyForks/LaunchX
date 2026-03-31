@@ -142,8 +142,9 @@ final class ClaudeSkillService: ObservableObject {
                         }
                     }
 
+                    let sanitizedDir = sanitizeDirectory(directory)
                     let isInstalled = skills.contains(where: {
-                        $0.repoOwner == repo.owner && $0.repoName == repo.name && $0.directory == directory
+                        $0.repoOwner == repo.owner && $0.repoName == repo.name && $0.directory == sanitizedDir
                     })
 
                     discovered.append(DiscoveredSkill(
@@ -206,9 +207,17 @@ final class ClaudeSkillService: ObservableObject {
 
     /// 安装 Skill
     func installSkill(_ discovered: DiscoveredSkill) throws {
-        guard let url = URL(string: discovered.rawUrl) else { return }
-
+        // 去重检查：如果已安装则跳过
         let sanitizedDir = sanitizeDirectory(discovered.directory)
+        if skills.contains(where: {
+            $0.repoOwner == discovered.repoOwner &&
+            $0.repoName == discovered.repoName &&
+            $0.directory == sanitizedDir
+        }) {
+            return
+        }
+
+        guard let url = URL(string: discovered.rawUrl) else { return }
 
         // 1. 下载 SKILL.md
         let content = try String(contentsOf: url, encoding: .utf8)
