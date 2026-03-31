@@ -261,6 +261,7 @@ class HotKeyService: ObservableObject {
             self.loadClipboardHotKey()
             self.loadPlainTextPasteHotKey()
             self.loadTranslateHotKeys()
+            self.loadClaudeCodeHotKey()
         }
     }
 

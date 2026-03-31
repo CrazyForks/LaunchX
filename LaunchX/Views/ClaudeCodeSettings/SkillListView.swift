@@ -127,9 +127,10 @@ struct SkillListView: View {
                             DiscoveredSkillRow(
                                 skill: discovered,
                                 onInstall: {
-                                    try? service.installSkill(discovered)
-                                    // 刷新发现列表的安装状态
-                                    Task { await service.discoverSkills() }
+                                    Task {
+                                        try? await service.installSkill(discovered)
+                                        await service.discoverSkills()
+                                    }
                                 }
                             )
                         }

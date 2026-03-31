@@ -306,7 +306,13 @@ class ResultCellView: NSView {
             portLabelWidthConstraint.isActive = true
             portLabelWidthConstraint.constant = 50
             iconView.image = item.icon
-            iconView.contentTintColor = nil
+            // Claude Code 活跃项图标保持绿色（已在 Modes 中配置 paletteColors）
+            // 选中时回退白色，未选中时保持原色（绿色）
+            if item.isClaudeCodeItem && item.path == "active" {
+                iconView.contentTintColor = isSelected ? .white : nil
+            } else {
+                iconView.contentTintColor = nil
+            }
         }
         iconView.isHidden = false
         nameLabel.stringValue = item.name

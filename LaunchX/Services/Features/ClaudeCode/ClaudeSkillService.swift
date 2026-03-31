@@ -132,7 +132,7 @@ final class ClaudeSkillService: ObservableObject {
                     var skillDesc = ""
 
                     if let contentUrl = URL(string: rawUrl) {
-                        if let contentData = try? Data(contentsOf: contentUrl),
+                        if let contentData = try? await URLSession.shared.data(from: contentUrl).0,
                            let content = String(data: contentData, encoding: .utf8) {
                             // 解析 YAML frontmatter
                             if let metadata = parseYAMLFrontmatter(content) {
@@ -206,7 +206,7 @@ final class ClaudeSkillService: ObservableObject {
     // MARK: - 安装
 
     /// 安装 Skill
-    func installSkill(_ discovered: DiscoveredSkill) throws {
+    func installSkill(_ discovered: DiscoveredSkill) async throws {
         // 去重检查：如果已安装则跳过
         let sanitizedDir = sanitizeDirectory(discovered.directory)
         if skills.contains(where: {
@@ -219,8 +219,9 @@ final class ClaudeSkillService: ObservableObject {
 
         guard let url = URL(string: discovered.rawUrl) else { return }
 
-        // 1. 下载 SKILL.md
-        let content = try String(contentsOf: url, encoding: .utf8)
+        // 1. 异步下载 SKILL.md
+        let (data, _) = try await URLSession.shared.data(from: url)
+        guard let content = String(data: data, encoding: .utf8) else { return }
 
         // 2. 保存到本地主副本
         let localDir = localSkillsDir.appendingPathComponent(sanitizedDir)

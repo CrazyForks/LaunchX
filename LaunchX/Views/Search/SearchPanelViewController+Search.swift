@@ -229,7 +229,7 @@ extension SearchPanelViewController {
 
         // 创建 Claude Code 入口结果
         let ccIcon =
-            NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Claude Code")
+            NSImage(systemSymbolName: "cpu", accessibilityDescription: "Claude Code")
             ?? NSImage()
         ccIcon.size = NSSize(width: 32, height: 32)
 

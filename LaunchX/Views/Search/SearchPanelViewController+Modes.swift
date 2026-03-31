@@ -1406,11 +1406,14 @@ extension SearchPanelViewController {
 
         for provider in providers {
             let isActive = provider.id == currentProviderId
-            let icon =
-                isActive
-                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                    ?? NSImage())
-                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            let icon: NSImage
+            if isActive {
+                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+            } else {
+                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+            }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
@@ -1444,11 +1447,14 @@ extension SearchPanelViewController {
             ))
 
         for server in mcpServers {
-            let icon =
-                server.isEnabled
-                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                    ?? NSImage())
-                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            let icon: NSImage
+            if server.isEnabled {
+                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+            } else {
+                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+            }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
@@ -1482,11 +1488,14 @@ extension SearchPanelViewController {
             ))
 
         for skill in skills {
-            let icon =
-                skill.isEnabled
-                ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                    ?? NSImage())
-                : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+            let icon: NSImage
+            if skill.isEnabled {
+                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+            } else {
+                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+            }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
@@ -1552,11 +1561,14 @@ extension SearchPanelViewController {
 
             for provider in providers {
                 let isActive = provider.id == currentProviderId
-                let icon =
-                    isActive
-                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                        ?? NSImage())
-                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                let icon: NSImage
+                if isActive {
+                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+                } else {
+                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
@@ -1583,11 +1595,14 @@ extension SearchPanelViewController {
                     isDirectory: false, isSectionHeader: true))
 
             for server in mcpServers {
-                let icon =
-                    server.isEnabled
-                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                        ?? NSImage())
-                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                let icon: NSImage
+                if server.isEnabled {
+                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+                } else {
+                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
@@ -1614,11 +1629,14 @@ extension SearchPanelViewController {
                     isDirectory: false, isSectionHeader: true))
 
             for skill in skills {
-                let icon =
-                    skill.isEnabled
-                    ? (NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-                        ?? NSImage())
-                    : (NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage())
+                let icon: NSImage
+                if skill.isEnabled {
+                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+                } else {
+                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
