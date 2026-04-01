@@ -37,6 +37,7 @@ struct BackupModel: Codable {
     // 高级扩展 - Claude Code
     let claudeCodeSwitcherSettings: ClaudeCodeSwitcherSettings
     let claudeProviders: [ClaudeProvider]
+    let mcpServers: [McpServer]?
 
     /// 备份文件版本校验错误
     struct UnsupportedVersionError: Error, LocalizedError {
@@ -66,6 +67,7 @@ struct BackupModel: Codable {
         remindersSettings = try container.decode(RemindersSettings.self, forKey: .remindersSettings)
         claudeCodeSwitcherSettings = try container.decode(ClaudeCodeSwitcherSettings.self, forKey: .claudeCodeSwitcherSettings)
         claudeProviders = try container.decode([ClaudeProvider].self, forKey: .claudeProviders)
+        mcpServers = try container.decodeIfPresent([McpServer].self, forKey: .mcpServers)
     }
 
     // 用于 createCurrent() 的直接初始化
@@ -80,7 +82,8 @@ struct BackupModel: Codable {
         terminalSettings: TerminalSettings,
         remindersSettings: RemindersSettings,
         claudeCodeSwitcherSettings: ClaudeCodeSwitcherSettings,
-        claudeProviders: [ClaudeProvider]
+        claudeProviders: [ClaudeProvider],
+        mcpServers: [McpServer]? = nil
     ) {
         self.metadata = metadata
         self.clipboardSettings = clipboardSettings
@@ -93,6 +96,7 @@ struct BackupModel: Codable {
         self.remindersSettings = remindersSettings
         self.claudeCodeSwitcherSettings = claudeCodeSwitcherSettings
         self.claudeProviders = claudeProviders
+        self.mcpServers = mcpServers
     }
 }
 
@@ -115,7 +119,8 @@ extension BackupModel {
             terminalSettings: TerminalSettings.load(),
             remindersSettings: RemindersSettings.load(),
             claudeCodeSwitcherSettings: ClaudeCodeSwitcherSettings.load(),
-            claudeProviders: ClaudeDataStore.shared.loadProviders()
+            claudeProviders: ClaudeDataStore.shared.loadProviders(),
+            mcpServers: ClaudeDataStore.shared.loadMcpServers()
         )
     }
 
@@ -133,6 +138,12 @@ extension BackupModel {
 
         // 还原 Claude Providers
         try? ClaudeDataStore.shared.saveProviders(claudeProviders)
+
+        // 还原 MCP 服务器配置（仅当备份中包含时）
+        if let mcpServers {
+            try? ClaudeDataStore.shared.saveMcpServers(mcpServers)
+            try? ClaudeMcpService.shared.syncToClaude()
+        }
 
         // 保存 snippets 数组到文件
         let appSupport = FileManager.default.urls(
