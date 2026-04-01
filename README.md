@@ -84,6 +84,8 @@ LaunchX 需要以下系统权限才能正常工作：
 - 书签搜索
 - 2FA 验证码 (macOS 26用户无需此功能)
 - v0.2.12 新增mac自带提醒事项的支持
+- 默认终端
+- Claude Code Privoder switch
 
 更多功能继续开发中...
 
