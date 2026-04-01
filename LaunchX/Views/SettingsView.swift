@@ -85,39 +85,10 @@ struct GeneralSettingsView: View {
                     Spacer()
                 }
 
-                // 3. Configuration Backup
-                HStack(spacing: 12) {
-                    Text("配置备份:")
-                        .frame(width: 85, alignment: .leading)
-
-                    Button(action: {
-                        BackupService.shared.exportConfiguration()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("导出")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: {
-                        BackupService.shared.importConfiguration()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "square.and.arrow.down")
-                            Text("导入")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-                }
-                .padding(.top, 4)
-
                 Divider()
                     .padding(.vertical, 4)
 
-                // 4. Default Window Mode
+                // 3. Default Window Mode
                 VStack(alignment: .leading, spacing: 8) {
                     Text("默认窗口模式:")
 

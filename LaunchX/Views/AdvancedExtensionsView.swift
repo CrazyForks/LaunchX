@@ -79,6 +79,39 @@ struct AdvancedExtensionsView: View {
                 }
             }
             Spacer()
+            Divider()
+                .padding(.horizontal, 8)
+            HStack(spacing: 8) {
+                Button(action: {
+                    BackupService.shared.exportConfiguration()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11))
+                        Text("导出")
+                            .font(.system(size: 12))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .focusable(false)
+
+                Button(action: {
+                    BackupService.shared.importConfiguration()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 11))
+                        Text("导入")
+                            .font(.system(size: 12))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .focusable(false)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .padding(.top, 12)
         .background(Color(nsColor: .controlBackgroundColor))

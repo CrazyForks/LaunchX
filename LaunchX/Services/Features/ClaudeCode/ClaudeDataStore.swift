@@ -56,10 +56,11 @@ final class ClaudeDataStore {
             .appendingPathComponent(".tmp_\(UUID().uuidString)")
         // 不用 .atomic，直接写入临时文件（避免 .atomic 内部 rename 与后续 moveItem 冲突）
         try jsonData.write(to: tempURL, options: [])
-        // 使用 replaceItemAt 实现原子替换（如果目标存在则覆盖，不存在则移动）
+        // 原子替换：如果目标已存在先删除，再将临时文件移动过去
         if fileManager.fileExists(atPath: url.path) {
             try fileManager.removeItem(at: url)
         }
+        try fileManager.moveItem(at: tempURL, to: url)
     }
 
     /// 读取 JSON 文件
