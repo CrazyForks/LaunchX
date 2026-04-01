@@ -5,14 +5,14 @@
         <item>
             <title>Version v0.3.3</title>
             <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/v0.3.3</sparkle:releaseNotesLink>
-            <pubDate>Wed, 01 Apr 2026 03:17:25 +0000</pubDate>
-            <sparkle:version>101</sparkle:version>
+            <pubDate>Wed, 01 Apr 2026 05:35:55 +0000</pubDate>
+            <sparkle:version>102</sparkle:version>
             <sparkle:shortVersionString>0.3.3</sparkle:shortVersionString>
             <enclosure
                 url="https://github.com/twotwoba/LaunchX/releases/download/v0.3.3/LaunchX-v0.3.3-arm64.dmg"
                 sparkle:os="macos"
-                sparkle:version="101"
-                sparkle:edSignature="v143596ebgj5H+6MD/7qM9yu44G3w6fQeQlPfiq9g6G4hc0YtFh0hRaoFkGsNaztcCXtfFy2Qi4W+8ritLH9DQ==" length="3430930"
+                sparkle:version="102"
+                sparkle:edSignature="W1/hxr94+kON5Rs4PnIXnALQ1LZ2LpzqS5t9w2B45gxX+JiEgdYlarcDVW4WlOszyde1mY2laqQVqErX3URNCg==" length="3431030"
                 type="application/octet-stream" />
         </item>
     </channel>
