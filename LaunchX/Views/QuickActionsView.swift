@@ -10,6 +10,7 @@ enum QuickActionType: Equatable {
     case openInApp  // 在应用中打开
     case openInReminders  // 在提醒事项中打开
     case delete  // 删除
+    case removeFromRecent  // 从最近列表移除
 
     var title: String {
         switch self {
@@ -21,6 +22,7 @@ enum QuickActionType: Equatable {
         case .openInApp: return "打开应用"
         case .openInReminders: return "在提醒事项中打开"
         case .delete: return "删除"
+        case .removeFromRecent: return "从最近列表移除"
         }
     }
 
@@ -35,6 +37,7 @@ enum QuickActionType: Equatable {
         case .openInApp: symbolName = "app.badge"
         case .openInReminders: symbolName = "list.bullet"
         case .delete: symbolName = "trash"
+        case .removeFromRecent: symbolName = "xmark.circle"
         }
         return NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
     }

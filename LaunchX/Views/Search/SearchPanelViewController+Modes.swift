@@ -102,6 +102,32 @@ extension SearchPanelViewController {
                 context.duration = 0.15
                 actionView.animator().alphaValue = 1
             }
+        } else if isInIDEProjectMode {
+            // IDE扩展模式:显示专用的快捷操作(不包含物理删除)
+            isInQuickActionsMode = true
+            let actions: [QuickActionType] = [
+                .openInTerminal, .showInFinder, .copyPath, .removeFromRecent,
+            ]
+            let actionsView = QuickActionsView(actions: actions)
+            actionsView.delegate = self
+            actionsView.translatesAutoresizingMaskIntoConstraints = false
+            // 确保显示在最顶层
+            contentView.addSubview(actionsView, positioned: .above, relativeTo: nil)
+
+            NSLayoutConstraint.activate([
+                actionsView.trailingAnchor.constraint(
+                    equalTo: contentView.trailingAnchor, constant: -12),
+                actionsView.bottomAnchor.constraint(
+                    equalTo: contentView.bottomAnchor, constant: -12),
+            ])
+
+            quickActionsView = actionsView
+
+            actionsView.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                actionsView.animator().alphaValue = 1
+            }
         } else {
             // 普通项目显示标准快捷操作
             isInQuickActionsMode = true
@@ -180,6 +206,8 @@ extension SearchPanelViewController {
             PanelManager.shared.hidePanel()
         case .delete:
             quickActionDelete(path: target.path, name: target.name)
+        case .removeFromRecent:
+            quickActionRemoveFromRecent(project: target)
         }
     }
 
@@ -355,8 +383,87 @@ extension SearchPanelViewController {
                 errorAlert.runModal()
             }
         } else {
-            // 用户取消，关闭快捷操作面板
+            // 用户取消,关闭快捷操作面板
             hideQuickActions()
+        }
+    }
+
+    /// 从最近列表移除
+    func quickActionRemoveFromRecent(project: SearchResult) {
+        hideQuickActions()
+
+        guard let ideType = currentIDEType else { return }
+
+        // 调用服务从IDE的最近项目列表中移除
+        IDERecentProjectsService.shared.removeRecentProject(
+            for: ideType,
+            projectPath: project.path
+        )
+
+        // 刷新项目列表
+        ideProjects = IDERecentProjectsService.shared.getRecentProjects(for: ideType, limit: 20)
+        filteredIDEProjects = ideProjects
+        results = ideProjects.map { $0.toSearchResult() }
+
+        // 如果移除后列表为空,退出IDE模式
+        if results.isEmpty {
+            exitIDEProjectMode()
+        } else {
+            // 调整选中索引
+            if selectedIndex >= results.count {
+                selectedIndex = max(0, results.count - 1)
+            }
+            tableView.reloadData()
+        }
+
+        // 显示成功提示
+        showSuccessMessage("已从最近列表中移除")
+    }
+
+    /// 显示成功提示消息
+    private func showSuccessMessage(_ message: String) {
+        // 创建提示容器
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        container.layer?.cornerRadius = 8
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        // 创建提示标签
+        let label = NSTextField(labelWithString: message)
+        label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .labelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(label)
+        contentView.addSubview(container, positioned: .above, relativeTo: nil)
+
+        // 居中显示
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: container.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -6),
+            container.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -60),
+        ])
+
+        // 动画显示后自动消失
+        label.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            label.animator().alphaValue = 1
+        } completionHandler: {
+            // 1.5秒后消失
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.3
+                    label.animator().alphaValue = 0
+                } completionHandler: {
+                    label.removeFromSuperview()
+                }
+            }
         }
     }
 

@@ -517,6 +517,280 @@ final class IDERecentProjectsService {
         return projects
     }
 
+    // MARK: - Remove Recent Projects
+
+    /// 从最近项目列表中移除指定项目
+    /// - Parameters:
+    ///   - ideType: IDE类型
+    ///   - projectPath: 项目路径
+    func removeRecentProject(for ideType: IDEType, projectPath: String) {
+        switch ideType {
+        case .vscode:
+            removeVSCodeRecentProject(projectPath: projectPath)
+        case .cursor:
+            removeCursorRecentProject(projectPath: projectPath)
+        case .zed:
+            removeZedRecentProject(projectPath: projectPath)
+        case .antigravity:
+            removeAntigravityRecentProject(projectPath: projectPath)
+        default:
+            if ideType.isJetBrains {
+                removeJetBrainsRecentProject(for: ideType, projectPath: projectPath)
+            }
+        }
+    }
+
+    /// 从VSCode最近项目列表中移除项目
+    private func removeVSCodeRecentProject(projectPath: String) {
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Code/User/globalStorage/state.vscdb"
+            )
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
+
+        do {
+            // 1. 读取当前数据
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath,
+                    "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';"
+                ]
+            )
+            guard !jsonString.isEmpty else { return }
+
+            // 2. 解析JSON并过滤
+            guard let data = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  var entries = json["entries"] as? [[String: Any]]
+            else { return }
+
+            // 3. 过滤掉要移除的项目
+            let filteredEntries = entries.filter { entry in
+                let path = extractPathFromEntry(entry)
+                return path != projectPath
+            }
+
+            // 4. 写回数据库
+            var modifiedJson: [String: Any] = ["entries": filteredEntries]
+            let modifiedData = try JSONSerialization.data(withJSONObject: modifiedJson)
+            let modifiedString = String(data: modifiedData, encoding: .utf8) ?? ""
+
+            // 使用UPDATE语句更新
+            let escapedValue = modifiedString.replacingOccurrences(of: "'", with: "''")
+            let updateSQL = "UPDATE ItemTable SET value = '\(escapedValue)' WHERE key='history.recentlyOpenedPathsList';"
+
+            try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [dbPath, updateSQL]
+            )
+        } catch {
+            print("Failed to remove VSCode recent project: \(error)")
+        }
+    }
+
+    /// 从Cursor最近项目列表中移除项目
+    private func removeCursorRecentProject(projectPath: String) {
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+            )
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
+
+        do {
+            // 1. 读取当前数据
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath,
+                    "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';"
+                ]
+            )
+            guard !jsonString.isEmpty else { return }
+
+            // 2. 解析JSON并过滤
+            guard let data = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  var entries = json["entries"] as? [[String: Any]]
+            else { return }
+
+            // 3. 过滤掉要移除的项目
+            let filteredEntries = entries.filter { entry in
+                let path = extractPathFromEntry(entry)
+                return path != projectPath
+            }
+
+            // 4. 写回数据库
+            var modifiedJson: [String: Any] = ["entries": filteredEntries]
+            let modifiedData = try JSONSerialization.data(withJSONObject: modifiedJson)
+            let modifiedString = String(data: modifiedData, encoding: .utf8) ?? ""
+
+            let escapedValue = modifiedString.replacingOccurrences(of: "'", with: "''")
+            let updateSQL = "UPDATE ItemTable SET value = '\(escapedValue)' WHERE key='history.recentlyOpenedPathsList';"
+
+            try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [dbPath, updateSQL]
+            )
+        } catch {
+            print("Failed to remove Cursor recent project: \(error)")
+        }
+    }
+
+    /// 从Zed最近项目列表中移除项目
+    private func removeZedRecentProject(projectPath: String) {
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Zed/db/0-stable/db.sqlite")
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
+
+        do {
+            // Zed使用workspaces表,直接DELETE即可
+            let deleteSQL = "DELETE FROM workspaces WHERE paths = '\(projectPath)';"
+
+            try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [dbPath, deleteSQL]
+            )
+        } catch {
+            print("Failed to remove Zed recent project: \(error)")
+        }
+    }
+
+    /// 从Antigravity最近项目列表中移除项目
+    private func removeAntigravityRecentProject(projectPath: String) {
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
+            )
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
+
+        do {
+            // 1. 读取当前数据
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath,
+                    "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';"
+                ]
+            )
+            guard !jsonString.isEmpty else { return }
+
+            // 2. 解析JSON并过滤
+            guard let data = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  var entries = json["entries"] as? [[String: Any]]
+            else { return }
+
+            // 3. 过滤掉要移除的项目
+            let filteredEntries = entries.filter { entry in
+                let path = extractPathFromEntry(entry)
+                return path != projectPath
+            }
+
+            // 4. 写回数据库
+            var modifiedJson: [String: Any] = ["entries": filteredEntries]
+            let modifiedData = try JSONSerialization.data(withJSONObject: modifiedJson)
+            let modifiedString = String(data: modifiedData, encoding: .utf8) ?? ""
+
+            let escapedValue = modifiedString.replacingOccurrences(of: "'", with: "''")
+            let updateSQL = "UPDATE ItemTable SET value = '\(escapedValue)' WHERE key='history.recentlyOpenedPathsList';"
+
+            try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [dbPath, updateSQL]
+            )
+        } catch {
+            print("Failed to remove Antigravity recent project: \(error)")
+        }
+    }
+
+    /// 从JetBrains IDE最近项目列表中移除项目
+    private func removeJetBrainsRecentProject(for ideType: IDEType, projectPath: String) {
+        // 查找JetBrains配置目录
+        let appSupportPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/JetBrains")
+            .path
+
+        guard FileManager.default.fileExists(atPath: appSupportPath) else { return }
+
+        // 根据IDE类型确定目录前缀
+        let dirPrefix: String
+        switch ideType {
+        case .jetbrainsIntelliJ: dirPrefix = "IntelliJIdea"
+        case .jetbrainsPyCharm: dirPrefix = "PyCharm"
+        case .jetbrainsWebStorm: dirPrefix = "WebStorm"
+        case .jetbrainsGoLand: dirPrefix = "GoLand"
+        case .jetbrainsRider: dirPrefix = "Rider"
+        case .jetbrainsClion: dirPrefix = "CLion"
+        default: return
+        }
+
+        // 查找最新版本的配置目录
+        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: appSupportPath)
+        else { return }
+
+        let matchingDirs = contents.filter { $0.hasPrefix(dirPrefix) }.sorted().reversed()
+
+        for dir in matchingDirs {
+            let recentProjectsPath = (appSupportPath as NSString)
+                .appendingPathComponent(dir)
+                .appending("/options/recentProjects.xml")
+
+            if FileManager.default.fileExists(atPath: recentProjectsPath) {
+                removeProjectFromJetBrainsXML(at: recentProjectsPath, projectPath: projectPath)
+                break
+            }
+        }
+    }
+
+    /// 从JetBrains XML文件中移除项目
+    private func removeProjectFromJetBrainsXML(at path: String, projectPath: String) {
+        guard let data = FileManager.default.contents(atPath: path),
+              var xml = String(data: data, encoding: .utf8)
+        else { return }
+
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        let xmlPath = projectPath.replacingOccurrences(of: homeDir, with: "$USER_HOME$")
+
+        // 简单的XML处理:移除包含该路径的entry或option行
+        let lines = xml.components(separatedBy: "\n")
+        let filteredLines = lines.filter { line in
+            !line.contains(xmlPath)
+        }
+
+        let modifiedXML = filteredLines.joined(separator: "\n")
+
+        do {
+            try modifiedXML.write(toFile: path, atomically: true, encoding: .utf8)
+        } catch {
+            print("Failed to remove JetBrains recent project: \(error)")
+        }
+    }
+
+    /// 从entry字典中提取路径
+    private func extractPathFromEntry(_ entry: [String: Any]) -> String? {
+        // 优先获取folderUri(项目文件夹)
+        if let folderUri = entry["folderUri"] as? String {
+            return uriToPath(folderUri)
+        }
+        // 其次获取workspace(工作区文件)
+        else if let workspace = entry["workspace"] as? String {
+            // 工作区文件,取其所在目录
+            if let wsPath = uriToPath(workspace) {
+                return (wsPath as NSString).deletingLastPathComponent
+            }
+        }
+        return nil
+    }
+
     // MARK: - Helpers
 
     /// 将 file:// URI 转换为路径
