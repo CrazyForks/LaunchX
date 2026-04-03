@@ -410,9 +410,9 @@ class ResultCellView: NSView {
             pathLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口、收藏入口、有进程统计的项、提醒事项垂直居中，其他顶部对齐
+        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口、收藏入口、有进程统计的项、提醒事项、Claude Code 项目垂直居中，其他顶部对齐
         if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || is2FAEntry
-            || isMemeEntry || isFavoriteEntry || hasProcessStats || isReminder
+            || isMemeEntry || isFavoriteEntry || hasProcessStats || isReminder || item.isClaudeCodeItem
         {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false

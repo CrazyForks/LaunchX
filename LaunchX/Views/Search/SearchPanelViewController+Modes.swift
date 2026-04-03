@@ -719,6 +719,11 @@ extension SearchPanelViewController {
             twoFAResults = []
         }
 
+        // 清理 Claude Code 模式
+        if isInClaudeCodeMode {
+            isInClaudeCodeMode = false
+        }
+
         // 恢复 UI
         restoreNormalModeUI()
         searchField.isHidden = false
@@ -1357,9 +1362,7 @@ extension SearchPanelViewController {
     /// 直接进入 Claude Code Switcher 模式（由快捷键触发）
     @objc func handleEnterClaudeCodeModeDirectly() {
         PanelManager.shared.showPanel()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.enterClaudeCodeMode()
-        }
+        enterClaudeCodeMode()
     }
 
     /// 进入 Claude Code Switcher 模式
