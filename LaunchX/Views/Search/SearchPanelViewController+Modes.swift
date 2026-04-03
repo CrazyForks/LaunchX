@@ -828,7 +828,6 @@ extension SearchPanelViewController {
         }
     }
 
-
     @objc func handleEnterIDEModeDirectly(_ notification: Notification) {
         print("SearchPanelViewController: handleEnterIDEModeDirectly called")
 
@@ -1411,18 +1410,24 @@ extension SearchPanelViewController {
             let isActive = provider.id == currentProviderId
             let icon: NSImage
             if isActive {
-                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                let baseImage =
+                    NSImage(
+                        systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [
+                    .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                ])
                 icon = baseImage.withSymbolConfiguration(config) ?? baseImage
             } else {
-                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                icon =
+                    NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
             }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
                 SearchResult(
                     name: provider.name,
-                    path: isActive ? "active" : "",
+                    path: "",
                     icon: icon,
                     isDirectory: false,
                     displayAlias: isActive ? "当前" : nil,
@@ -1452,18 +1457,24 @@ extension SearchPanelViewController {
         for server in mcpServers {
             let icon: NSImage
             if server.isEnabled {
-                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                let baseImage =
+                    NSImage(
+                        systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [
+                    .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                ])
                 icon = baseImage.withSymbolConfiguration(config) ?? baseImage
             } else {
-                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                icon =
+                    NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
             }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
                 SearchResult(
                     name: server.name,
-                    path: server.isEnabled ? "active" : "",
+                    path: "",
                     icon: icon,
                     isDirectory: false,
                     displayAlias: server.isEnabled ? "已启用" : "已禁用",
@@ -1493,18 +1504,24 @@ extension SearchPanelViewController {
         for skill in skills {
             let icon: NSImage
             if skill.isEnabled {
-                let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                let baseImage =
+                    NSImage(
+                        systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                    ?? NSImage()
+                let config = NSImage.SymbolConfiguration(paletteColors: [
+                    .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                ])
                 icon = baseImage.withSymbolConfiguration(config) ?? baseImage
             } else {
-                icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                icon =
+                    NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
             }
             icon.size = NSSize(width: 32, height: 32)
 
             items.append(
                 SearchResult(
                     name: skill.name,
-                    path: skill.isEnabled ? "active" : "",
+                    path: "",
                     icon: icon,
                     isDirectory: false,
                     displayAlias: skill.isEnabled ? "已启用" : "已禁用",
@@ -1566,16 +1583,23 @@ extension SearchPanelViewController {
                 let isActive = provider.id == currentProviderId
                 let icon: NSImage
                 if isActive {
-                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    let baseImage =
+                        NSImage(
+                            systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil
+                        ) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [
+                        .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                    ])
                     icon = baseImage.withSymbolConfiguration(config) ?? baseImage
                 } else {
-                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                    icon =
+                        NSImage(systemSymbolName: "circle", accessibilityDescription: nil)
+                        ?? NSImage()
                 }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
-                        name: provider.name, path: isActive ? "active" : "", icon: icon,
+                        name: provider.name, path: "", icon: icon,
                         isDirectory: false, displayAlias: isActive ? "当前" : nil,
                         isClaudeCodeItem: true, claudeCodeItemType: .provider,
                         claudeCodeItemId: provider.id.uuidString))
@@ -1600,16 +1624,23 @@ extension SearchPanelViewController {
             for server in mcpServers {
                 let icon: NSImage
                 if server.isEnabled {
-                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    let baseImage =
+                        NSImage(
+                            systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil
+                        ) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [
+                        .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                    ])
                     icon = baseImage.withSymbolConfiguration(config) ?? baseImage
                 } else {
-                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                    icon =
+                        NSImage(systemSymbolName: "circle", accessibilityDescription: nil)
+                        ?? NSImage()
                 }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
-                        name: server.name, path: server.isEnabled ? "active" : "", icon: icon,
+                        name: server.name, path: "", icon: icon,
                         isDirectory: false, displayAlias: server.isEnabled ? "已启用" : "已禁用",
                         isClaudeCodeItem: true, claudeCodeItemType: .mcp,
                         claudeCodeItemId: server.id.uuidString))
@@ -1634,16 +1665,23 @@ extension SearchPanelViewController {
             for skill in skills {
                 let icon: NSImage
                 if skill.isEnabled {
-                    let baseImage = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) ?? NSImage()
-                    let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen, .systemGreen.withAlphaComponent(0.15)])
+                    let baseImage =
+                        NSImage(
+                            systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil
+                        ) ?? NSImage()
+                    let config = NSImage.SymbolConfiguration(paletteColors: [
+                        .systemGreen, .systemGreen.withAlphaComponent(0.15),
+                    ])
                     icon = baseImage.withSymbolConfiguration(config) ?? baseImage
                 } else {
-                    icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+                    icon =
+                        NSImage(systemSymbolName: "circle", accessibilityDescription: nil)
+                        ?? NSImage()
                 }
                 icon.size = NSSize(width: 32, height: 32)
                 items.append(
                     SearchResult(
-                        name: skill.name, path: skill.isEnabled ? "active" : "", icon: icon,
+                        name: skill.name, path: "", icon: icon,
                         isDirectory: false, displayAlias: skill.isEnabled ? "已启用" : "已禁用",
                         isClaudeCodeItem: true, claudeCodeItemType: .skill,
                         claudeCodeItemId: skill.id.uuidString))
@@ -1671,16 +1709,18 @@ extension SearchPanelViewController {
     /// 处理 Claude Code 模式中的选中项
     func handleClaudeCodeItemSelected(_ item: SearchResult) {
         guard item.isClaudeCodeItem, let itemType = item.claudeCodeItemType,
-              let itemIdStr = item.claudeCodeItemId,
-              let itemUUID = UUID(uuidString: itemIdStr)
+            let itemIdStr = item.claudeCodeItemId,
+            let itemUUID = UUID(uuidString: itemIdStr)
         else { return }
 
         switch itemType {
         case .provider:
             // 切换 Provider
-            guard let provider = ClaudeProviderService.shared.providers.first(where: {
-                $0.id == itemUUID
-            }) else { return }
+            guard
+                let provider = ClaudeProviderService.shared.providers.first(where: {
+                    $0.id == itemUUID
+                })
+            else { return }
             do {
                 try ClaudeProviderService.shared.switchProvider(to: provider)
             } catch {
@@ -1691,9 +1731,11 @@ extension SearchPanelViewController {
 
         case .mcp:
             // 切换 MCP 启用/禁用
-            guard let server = ClaudeMcpService.shared.servers.first(where: {
-                $0.id == itemUUID
-            }) else { return }
+            guard
+                let server = ClaudeMcpService.shared.servers.first(where: {
+                    $0.id == itemUUID
+                })
+            else { return }
             do {
                 try ClaudeMcpService.shared.toggleEnabled(server)
             } catch {
@@ -1703,9 +1745,11 @@ extension SearchPanelViewController {
 
         case .skill:
             // 切换 Skill 启用/禁用
-            guard let skill = ClaudeSkillService.shared.skills.first(where: {
-                $0.id == itemUUID
-            }) else { return }
+            guard
+                let skill = ClaudeSkillService.shared.skills.first(where: {
+                    $0.id == itemUUID
+                })
+            else { return }
             do {
                 try ClaudeSkillService.shared.toggleEnabled(skill)
             } catch {
