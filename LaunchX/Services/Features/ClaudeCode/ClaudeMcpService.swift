@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 /// Claude Code MCP 服务器管理服务
 @MainActor
@@ -51,7 +51,7 @@ final class ClaudeMcpService: ObservableObject {
 
     // MARK: - CRUD
 
-    /// 添加 MCP 服务器
+    /// 添加 MCP
     @discardableResult
     func addServer(_ server: McpServer) throws -> String? {
         if let error = validateConfig(server.serverConfig) {
@@ -65,7 +65,7 @@ final class ClaudeMcpService: ObservableObject {
         return nil
     }
 
-    /// 更新 MCP 服务器
+    /// 更新 MCP
     func updateServer(_ server: McpServer) throws {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
         servers[index] = server
@@ -75,7 +75,7 @@ final class ClaudeMcpService: ObservableObject {
         }
     }
 
-    /// 删除 MCP 服务器
+    /// 删除 MCP
     func deleteServer(_ server: McpServer) throws {
         servers.removeAll { $0.id == server.id }
         try persistData()
@@ -97,8 +97,9 @@ final class ClaudeMcpService: ObservableObject {
     /// 读取 ~/.claude.json
     func readClaudeJson() -> [String: Any]? {
         guard fileManager.fileExists(atPath: claudeJsonPath.path),
-              let data = try? Data(contentsOf: claudeJsonPath),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let data = try? Data(contentsOf: claudeJsonPath),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             return nil
         }
         return json
@@ -146,10 +147,11 @@ final class ClaudeMcpService: ObservableObject {
 
     // MARK: - 导入
 
-    /// 从 ~/.claude.json 导入 MCP 服务器
+    /// 从 ~/.claude.json 导入 MCP
     func importFromClaude() -> Int {
         guard let config = readClaudeJson(),
-              let mcpServers = config["mcpServers"] as? [String: Any] else {
+            let mcpServers = config["mcpServers"] as? [String: Any]
+        else {
             return 0
         }
 

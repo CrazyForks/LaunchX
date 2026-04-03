@@ -1447,7 +1447,7 @@ extension SearchPanelViewController {
 
         items.append(
             SearchResult(
-                name: "MCP 服务器",
+                name: "MCP",
                 path: "",
                 icon: mcpHeaderIcon,
                 isDirectory: false,
@@ -1618,7 +1618,7 @@ extension SearchPanelViewController {
             mcpHeaderIcon.size = NSSize(width: 32, height: 32)
             items.append(
                 SearchResult(
-                    name: "MCP 服务器", path: "", icon: mcpHeaderIcon,
+                    name: "MCP", path: "", icon: mcpHeaderIcon,
                     isDirectory: false, isSectionHeader: true))
 
             for server in mcpServers {

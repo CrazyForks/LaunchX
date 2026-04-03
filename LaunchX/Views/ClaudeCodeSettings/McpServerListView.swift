@@ -12,7 +12,7 @@ struct McpServerListView: View {
         VStack(spacing: 0) {
             // 工具栏
             HStack {
-                Text("MCP 服务器")
+                Text("MCP")
                     .font(.headline)
                 Spacer()
                 Button(action: {
@@ -46,9 +46,9 @@ struct McpServerListView: View {
                     Image(systemName: "puzzlepiece.extension")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary)
-                    Text("暂无 MCP 服务器")
+                    Text("暂无 MCP")
                         .foregroundColor(.secondary)
-                    Text("点击「添加」创建新的 MCP 服务器，或「从 Claude 导入」已有配置")
+                    Text("点击「添加」创建新的 MCP，或「从 Claude 导入」已有配置")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()

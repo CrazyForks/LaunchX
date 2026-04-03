@@ -17,7 +17,7 @@ struct McpServerFormView: View {
                 Image(systemName: "puzzlepiece.extension")
                     .font(.system(size: 14))
                     .foregroundColor(.accentColor)
-                Text(editingServer != nil ? "编辑 MCP 服务器" : "添加 MCP 服务器")
+                Text(editingServer != nil ? "编辑 MCP" : "添加 MCP")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
             }
@@ -104,29 +104,31 @@ struct McpServerFormView: View {
                 let dict = server.serverConfig.mapValues { $0.value }
                 if let data = try? JSONSerialization.data(
                     withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
-                   let str = String(data: data, encoding: .utf8) {
+                    let str = String(data: data, encoding: .utf8)
+                {
                     configJson = str
                 }
             } else {
                 configJson = """
-                {
-                  "args": [
-                    "-y",
-                    "@modelcontextprotocol/server-filesystem"
-                  ],
-                  "command": "npx"
-                }
-                """
+                    {
+                      "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem"
+                      ],
+                      "command": "npx"
+                    }
+                    """
             }
         }
     }
 
     private func formatJson() {
         guard let data = configJson.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data),
-              let formatted = try? JSONSerialization.data(
+            let json = try? JSONSerialization.jsonObject(with: data),
+            let formatted = try? JSONSerialization.data(
                 withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-              let str = String(data: formatted, encoding: .utf8) else {
+            let str = String(data: formatted, encoding: .utf8)
+        else {
             errorMessage = "无效的 JSON 格式"
             return
         }
@@ -136,7 +138,8 @@ struct McpServerFormView: View {
 
     private func saveServer() {
         guard let data = configJson.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             errorMessage = "无效的 JSON 格式"
             return
         }

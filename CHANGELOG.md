@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.4
+- 修复了快捷键切换在claudecode和ide界面来回切换视图错位的问题
+
 ## v0.3.3
 - 移植了 cc switch 中关于 Claude Code 供应商切换的功能
 - 支持 MCP 的安装/切换
