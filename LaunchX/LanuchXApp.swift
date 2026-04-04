@@ -85,6 +85,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 2. Check permissions first before setting up hotkey
         checkPermissionsAndSetup()
 
+        // 3. Apply keyboard remapping from saved settings
+        applyKeyRemapSettings()
+
         // 3. 启动时静默检查更新 (不了不了，做一个不打扰的小朋友)
         // UpdateService.shared.checkForUpdates(manual: false)
     }
@@ -93,6 +96,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("LaunchX: System will sleep, saving data immediately")
         // 立即保存剪贴板数据
         ClipboardService.shared.saveImmediately()
+    }
+
+    /// 应用保存的键盘映射设置
+    private func applyKeyRemapSettings() {
+        // 所有键盘映射功能都需要辅助功能权限并通过 CGEventTap 实现
+        guard AXIsProcessTrusted() else { return }
+
+        let capsSwap = UserDefaults.standard.bool(forKey: "keyRemapCapsControlSwap")
+        let hyperKey = UserDefaults.standard.bool(forKey: "keyRemapHyperKey")
+        let quoteSwap = UserDefaults.standard.bool(forKey: "keyRemapQuoteSwap")
+
+        KeyRemapService.shared.applySettings(capsSwap: capsSwap, hyper: hyperKey, quote: quoteSwap)
     }
 
     /// 检查是否运行在 App Translocation 模式下
@@ -311,7 +326,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.isStatusItemSetup = false
                     self.setupStatusItem()
                     self.setupHotKey()
-                    // 不自动关闭授权窗口，让用户完成所有授权后手动点击"开始使用"
+                    // 异步应用键盘映射设置（含同步 Process 调用，避免阻塞主线程导致引导页不更新）
+                    DispatchQueue.main.async {
+                        self.applyKeyRemapSettings()
+                    }
                     print("LaunchX: Accessibility granted, statusItem and hotkey setup complete")
                 }
             }
@@ -598,6 +616,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func explicitQuit() {
+        // Clean up keyboard remapping
+        KeyRemapService.shared.stopEventTap()
+
         // Clean up status item before quitting
         if let statusItem = statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)

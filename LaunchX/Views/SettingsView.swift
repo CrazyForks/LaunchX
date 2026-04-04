@@ -182,6 +182,9 @@ struct GeneralSettingsView: View {
                     .padding(.top, 4)
                 }
 
+                // MARK: - Keyboard Remapping
+                KeyRemapSettingsView()
+
                 Divider()
                     .padding(.vertical, 4)
 
@@ -688,6 +691,119 @@ struct StatRow: View {
             Text(value)
                 .fontWeight(.medium)
             Spacer()
+        }
+    }
+}
+
+// MARK: - 键盘映射设置视图
+
+struct KeyRemapSettingsView: View {
+    @AppStorage("keyRemapCapsControlSwap") private var capsControlSwap = false
+    @AppStorage("keyRemapHyperKey") private var hyperKey = false
+    @AppStorage("keyRemapQuoteSwap") private var quoteSwap = false
+
+    @State private var hasAccessibilityPermission = false
+    @State private var debugInfo = ""
+    @State private var systemHasCapsSwap = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Text("键盘映射:")
+                    .frame(width: 85, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    if hasAccessibilityPermission {
+                        // Warning: system-level Caps↔Ctrl conflict
+                        if systemHasCapsSwap && capsControlSwap {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 10))
+                                Text("检测到系统设置中已互换Caps↔Ctrl，请先在系统设置→键盘→修饰键中恢复默认")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 10))
+                                Button("打开系统设置") {
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .font(.system(size: 10))
+                                .buttonStyle(.plain)
+                                .foregroundColor(.accentColor)
+                            }
+                        }
+
+                        Toggle("Caps ↔ Control 互换", isOn: $capsControlSwap)
+                            .toggleStyle(CheckboxToggleStyle())
+                            .onChange(of: capsControlSwap) { _, newValue in
+                                KeyRemapService.shared.capsControlSwapEnabled = newValue
+                                debugInfo = "Caps↔Ctrl \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
+                            }
+
+                        Toggle("Hyper 键 (右Command)", isOn: $hyperKey)
+                            .toggleStyle(CheckboxToggleStyle())
+                            .onChange(of: hyperKey) { _, newValue in
+                                KeyRemapService.shared.hyperKeyEnabled = newValue
+                                debugInfo = "Hyper键 \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
+                            }
+
+                        Toggle("引号互换", isOn: $quoteSwap)
+                            .toggleStyle(CheckboxToggleStyle())
+                            .onChange(of: quoteSwap) { _, newValue in
+                                KeyRemapService.shared.quoteSwapEnabled = newValue
+                                debugInfo = "引号互换 \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
+                            }
+                    } else {
+                        HStack(spacing: 4) {
+                            Text("键盘映射需要")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 11))
+                            Button("辅助功能权限") {
+                                openAccessibilityPreferences()
+                            }
+                            .font(.system(size: 11))
+                            .buttonStyle(.plain)
+                            .foregroundColor(.accentColor)
+                            .underline()
+                        }
+                    }
+
+                    // Debug info
+                    if !debugInfo.isEmpty {
+                        Text(debugInfo)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+        }
+        .onAppear {
+            hasAccessibilityPermission = KeyRemapService.shared.hasAccessibilityPermission
+
+            // Detect system-level Caps↔Ctrl swap (set via System Preferences)
+            systemHasCapsSwap = KeyRemapService.shared.detectCapsControlSwap()
+            debugInfo = "权限:\(hasAccessibilityPermission ? "已授权" : "未授权"), 系统Caps↔Ctrl:\(systemHasCapsSwap ? "已互换" : "未互换")"
+
+            if systemHasCapsSwap && !capsControlSwap {
+                capsControlSwap = true
+            }
+
+            // Apply saved settings via CGEventTap
+            if hasAccessibilityPermission {
+                KeyRemapService.shared.applySettings(capsSwap: capsControlSwap, hyper: hyperKey, quote: quoteSwap)
+            }
+        }
+    }
+
+    private func openAccessibilityPreferences() {
+        if let url = URL(
+            string:
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        ) {
+            NSWorkspace.shared.open(url)
         }
     }
 }
