@@ -28,6 +28,7 @@
 - **实用工具** - Base64 编码、IP 查询、URL 处理、UUID 生成等
 - **提醒事项管理** - 支持展示当天的提醒事项，如果备注中设有URL，可通过⌘K快速打开
 - **内置Claude Code cc-switch** - 支持基于claudecode的provider、mcp、skills的快捷切换/管理
+- **内置3个改键选择** - caps/ctrl互换，单/双引号互换，右 ⌘ 改为Hyper按键（F19）
 
 ## 截图
 
