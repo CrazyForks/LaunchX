@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.5
+- 新增了类似 Karabiner 的三个按键映射：caps<->ctrl互换，F19右command，单双引号互换
+- 简约/完整UI界面优化
+
 ## v0.3.4
 - 修复了快捷键切换在claudecode和ide界面来回切换视图错位的问题
 - IDE拓展中的文件夹删除改为了从最近列表移除
