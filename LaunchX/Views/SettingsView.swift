@@ -92,14 +92,7 @@ struct GeneralSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("默认窗口模式:")
 
-                    Picker("", selection: $windowModeString) {
-                        Text("简约").tag("simple")
-                        Text("完整").tag("full")
-                    }
-                    .pickerStyle(RadioGroupPickerStyle())
-                    .labelsHidden()
-
-                    // Visual Representation
+                    // Visual cards (tappable, no radio buttons)
                     HStack(spacing: 30) {
                         VStack {
                             ZStack {
@@ -122,7 +115,7 @@ struct GeneralSettingsView: View {
                                         lineWidth: 2)
                             )
 
-                            Text("Simple")
+                            Text("简约")
                                 .font(.caption)
                                 .foregroundColor(
                                     windowModeString == "simple" ? .primary : .secondary)
@@ -157,7 +150,7 @@ struct GeneralSettingsView: View {
                                         lineWidth: 2)
                             )
 
-                            Text("Full")
+                            Text("完整")
                                 .font(.caption)
                                 .foregroundColor(windowModeString == "full" ? .primary : .secondary)
                         }
@@ -183,6 +176,9 @@ struct GeneralSettingsView: View {
                 }
 
                 // MARK: - Keyboard Remapping
+                Divider()
+                    .padding(.vertical, 4)
+
                 KeyRemapSettingsView()
 
                 Divider()
@@ -703,7 +699,6 @@ struct KeyRemapSettingsView: View {
     @AppStorage("keyRemapQuoteSwap") private var quoteSwap = false
 
     @State private var hasAccessibilityPermission = false
-    @State private var debugInfo = ""
     @State private var systemHasCapsSwap = false
 
     var body: some View {
@@ -712,15 +707,38 @@ struct KeyRemapSettingsView: View {
                 Text("键盘映射:")
                     .frame(width: 85, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    if hasAccessibilityPermission {
-                        // Warning: system-level Caps↔Ctrl conflict
+                if hasAccessibilityPermission {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 16) {
+                            Toggle("Caps ↔ Control", isOn: $capsControlSwap)
+                                .toggleStyle(CheckboxToggleStyle())
+                                .onChange(of: capsControlSwap) { _, newValue in
+                                    KeyRemapService.shared.capsControlSwapEnabled = newValue
+                                }
+
+                            Toggle("Hyper (右⌘)", isOn: $hyperKey)
+                                .toggleStyle(CheckboxToggleStyle())
+                                .onChange(of: hyperKey) { _, newValue in
+                                    KeyRemapService.shared.hyperKeyEnabled = newValue
+                                }
+
+                            Toggle("引号互换", isOn: $quoteSwap)
+                                .toggleStyle(CheckboxToggleStyle())
+                                .onChange(of: quoteSwap) { _, newValue in
+                                    KeyRemapService.shared.quoteSwapEnabled = newValue
+                                }
+
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // System-level Caps↔Ctrl warning (below the checkboxes)
                         if systemHasCapsSwap && capsControlSwap {
                             HStack(spacing: 4) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.orange)
                                     .font(.system(size: 10))
-                                Text("检测到系统设置中已互换Caps↔Ctrl，请先在系统设置→键盘→修饰键中恢复默认")
+                                Text("如在系统设置→键盘→修饰键中已互换Caps↔Ctrl，建议先恢复默认以避免冲突")
                                     .foregroundColor(.orange)
                                     .font(.system(size: 10))
                                 Button("打开系统设置") {
@@ -731,67 +749,37 @@ struct KeyRemapSettingsView: View {
                                 .font(.system(size: 10))
                                 .buttonStyle(.plain)
                                 .foregroundColor(.accentColor)
+                                Spacer()
                             }
-                        }
-
-                        Toggle("Caps ↔ Control 互换", isOn: $capsControlSwap)
-                            .toggleStyle(CheckboxToggleStyle())
-                            .onChange(of: capsControlSwap) { _, newValue in
-                                KeyRemapService.shared.capsControlSwapEnabled = newValue
-                                debugInfo = "Caps↔Ctrl \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
-                            }
-
-                        Toggle("Hyper 键 (右Command)", isOn: $hyperKey)
-                            .toggleStyle(CheckboxToggleStyle())
-                            .onChange(of: hyperKey) { _, newValue in
-                                KeyRemapService.shared.hyperKeyEnabled = newValue
-                                debugInfo = "Hyper键 \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
-                            }
-
-                        Toggle("引号互换", isOn: $quoteSwap)
-                            .toggleStyle(CheckboxToggleStyle())
-                            .onChange(of: quoteSwap) { _, newValue in
-                                KeyRemapService.shared.quoteSwapEnabled = newValue
-                                debugInfo = "引号互换 \(newValue ? "开启" : "关闭"), EventTap=\(KeyRemapService.shared.isEventTapActive ? "活跃" : "未启动")"
-                            }
-                    } else {
-                        HStack(spacing: 4) {
-                            Text("键盘映射需要")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 11))
-                            Button("辅助功能权限") {
-                                openAccessibilityPreferences()
-                            }
-                            .font(.system(size: 11))
-                            .buttonStyle(.plain)
-                            .foregroundColor(.accentColor)
-                            .underline()
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-
-                    // Debug info
-                    if !debugInfo.isEmpty {
-                        Text(debugInfo)
-                            .font(.system(size: 10))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(spacing: 4) {
+                        Text("键盘映射需要")
                             .foregroundColor(.secondary)
+                            .font(.system(size: 11))
+                        Button("辅助功能权限") {
+                            openAccessibilityPreferences()
+                        }
+                        .font(.system(size: 11))
+                        .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
+                        .underline()
                     }
                 }
-
-                Spacer()
             }
         }
         .onAppear {
             hasAccessibilityPermission = KeyRemapService.shared.hasAccessibilityPermission
 
-            // Detect system-level Caps↔Ctrl swap (set via System Preferences)
             systemHasCapsSwap = KeyRemapService.shared.detectCapsControlSwap()
-            debugInfo = "权限:\(hasAccessibilityPermission ? "已授权" : "未授权"), 系统Caps↔Ctrl:\(systemHasCapsSwap ? "已互换" : "未互换")"
 
             if systemHasCapsSwap && !capsControlSwap {
                 capsControlSwap = true
             }
 
-            // Apply saved settings via CGEventTap
             if hasAccessibilityPermission {
                 KeyRemapService.shared.applySettings(capsSwap: capsControlSwap, hyper: hyperKey, quote: quoteSwap)
             }
