@@ -4,10 +4,6 @@ import Carbon
 class KeyRemapService {
     static let shared = KeyRemapService()
 
-    // MARK: - HID Key Codes
-    private let kHIDCapsLock: Int64 = 0x700000039  // 30064771129
-    private let kHIDLeftControl: Int64 = 0x7000000E0  // 30064771296
-
     // MARK: - State
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -15,14 +11,6 @@ class KeyRemapService {
 
     // MARK: - Settings
     private var batchUpdate = false
-
-    var capsControlSwapEnabled = false {
-        didSet {
-            if !batchUpdate {
-                applyCapsControlSwap()
-            }
-        }
-    }
 
     var hyperKeyEnabled = false {
         didSet { if !batchUpdate { updateEventTap() } }
@@ -46,82 +34,13 @@ class KeyRemapService {
 
     // MARK: - Batch Update
 
-    func applySettings(capsSwap: Bool, hyper: Bool, quote: Bool) {
+    func applySettings(hyper: Bool, quote: Bool) {
         batchUpdate = true
-        capsControlSwapEnabled = capsSwap
         hyperKeyEnabled = hyper
         quoteSwapEnabled = quote
         batchUpdate = false
-        // Apply Caps↔Ctrl via hidutil+defaults
-        applyCapsControlSwap()
         // Start/stop CGEventTap for Hyper+Quote
         updateEventTap()
-    }
-
-    // MARK: - Caps ↔ Control Swap (hidutil + defaults)
-
-    private func applyCapsControlSwap() {
-        let keys = enumerateKeyboardMappingKeys()
-
-        if capsControlSwapEnabled {
-            // Write Caps↔LeftCtrl bidirectional swap
-            let mappingArgs = [
-                "{ HIDKeyboardModifierMappingDst = \(kHIDLeftControl); HIDKeyboardModifierMappingSrc = \(kHIDCapsLock); }",
-                "{ HIDKeyboardModifierMappingDst = \(kHIDCapsLock); HIDKeyboardModifierMappingSrc = \(kHIDLeftControl); }",
-            ]
-
-            for key in keys {
-                let args = ["-currentHost", "write", "-g", key, "-array"] + mappingArgs
-                _ = runProcess("/usr/bin/defaults", arguments: args)
-            }
-
-            // Apply immediately via hidutil
-            let json = "{\"UserKeyMapping\":[{\"HIDKeyboardModifierMappingSrc\":\(kHIDCapsLock),\"HIDKeyboardModifierMappingDst\":\(kHIDLeftControl)},{\"HIDKeyboardModifierMappingSrc\":\(kHIDLeftControl),\"HIDKeyboardModifierMappingDst\":\(kHIDCapsLock)}]}"
-            let result = runProcess("/usr/bin/hidutil", arguments: ["property", "--set", json])
-            print("KeyRemapService: Caps↔Ctrl enabled, hidutil: \(result)")
-        } else {
-            // Clear all keyboard mappings
-            for key in keys {
-                let args = ["-currentHost", "write", "-g", key, "-array"]
-                _ = runProcess("/usr/bin/defaults", arguments: args)
-            }
-
-            // Clear hidutil immediately
-            let result = runProcess("/usr/bin/hidutil", arguments: ["property", "--set", "{\"UserKeyMapping\":[]}"])
-            print("KeyRemapService: Caps↔Ctrl disabled, hidutil: \(result)")
-        }
-    }
-
-    /// Enumerate all keyboard modifier mapping keys from GlobalPreferences
-    private func enumerateKeyboardMappingKeys() -> [String] {
-        let output = runProcess("/usr/bin/defaults", arguments: ["-currentHost", "read", "-g"])
-        var keys: [String] = []
-        for line in output.components(separatedBy: "\n") {
-            if line.contains("com.apple.keyboard.modifiermapping") {
-                if let range = line.range(of: "\"com.apple.keyboard.modifiermapping.[^\"]+\"", options: .regularExpression) {
-                    let key = String(line[range]).replacingOccurrences(of: "\"", with: "")
-                    keys.append(key)
-                }
-            }
-        }
-        if keys.isEmpty {
-            keys = ["com.apple.keyboard.modifiermapping.1452-833-0"]
-        }
-        return keys
-    }
-
-    /// Detect if Caps↔Ctrl swap is active in system GlobalPreferences
-    func detectCapsControlSwap() -> Bool {
-        let output = runProcess("/usr/bin/defaults", arguments: ["-currentHost", "read", "-g"])
-        let entries = output.components(separatedBy: "}")
-        for entry in entries {
-            let hasCapsSrc = entry.contains("HIDKeyboardModifierMappingSrc = 30064771129")
-            let hasCapsDst = entry.contains("HIDKeyboardModifierMappingDst = 30064771129")
-            if hasCapsSrc && !hasCapsDst {
-                return true
-            }
-        }
-        return false
     }
 
     // MARK: - CGEventTap Lifecycle

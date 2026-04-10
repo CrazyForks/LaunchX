@@ -103,11 +103,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 所有键盘映射功能都需要辅助功能权限并通过 CGEventTap 实现
         guard AXIsProcessTrusted() else { return }
 
-        let capsSwap = UserDefaults.standard.bool(forKey: "keyRemapCapsControlSwap")
         let hyperKey = UserDefaults.standard.bool(forKey: "keyRemapHyperKey")
         let quoteSwap = UserDefaults.standard.bool(forKey: "keyRemapQuoteSwap")
 
-        KeyRemapService.shared.applySettings(capsSwap: capsSwap, hyper: hyperKey, quote: quoteSwap)
+        KeyRemapService.shared.applySettings(hyper: hyperKey, quote: quoteSwap)
     }
 
     /// 检查是否运行在 App Translocation 模式下

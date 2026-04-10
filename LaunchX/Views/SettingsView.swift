@@ -694,12 +694,10 @@ struct StatRow: View {
 // MARK: - 键盘映射设置视图
 
 struct KeyRemapSettingsView: View {
-    @AppStorage("keyRemapCapsControlSwap") private var capsControlSwap = false
     @AppStorage("keyRemapHyperKey") private var hyperKey = false
     @AppStorage("keyRemapQuoteSwap") private var quoteSwap = false
 
     @State private var hasAccessibilityPermission = false
-    @State private var systemHasCapsSwap = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -710,12 +708,6 @@ struct KeyRemapSettingsView: View {
                 if hasAccessibilityPermission {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 16) {
-                            Toggle("Caps ↔ Control", isOn: $capsControlSwap)
-                                .toggleStyle(CheckboxToggleStyle())
-                                .onChange(of: capsControlSwap) { _, newValue in
-                                    KeyRemapService.shared.capsControlSwapEnabled = newValue
-                                }
-
                             Toggle("Hyper (右⌘)", isOn: $hyperKey)
                                 .toggleStyle(CheckboxToggleStyle())
                                 .onChange(of: hyperKey) { _, newValue in
@@ -731,28 +723,6 @@ struct KeyRemapSettingsView: View {
                             Spacer()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-
-                        // System-level Caps↔Ctrl warning (below the checkboxes)
-                        if systemHasCapsSwap && capsControlSwap {
-                            HStack(spacing: 4) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                    .font(.system(size: 10))
-                                Text("如在系统设置→键盘→修饰键中已互换Caps↔Ctrl，建议先恢复默认以避免冲突")
-                                    .foregroundColor(.orange)
-                                    .font(.system(size: 10))
-                                Button("打开系统设置") {
-                                    if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                }
-                                .font(.system(size: 10))
-                                .buttonStyle(.plain)
-                                .foregroundColor(.accentColor)
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -774,14 +744,8 @@ struct KeyRemapSettingsView: View {
         .onAppear {
             hasAccessibilityPermission = KeyRemapService.shared.hasAccessibilityPermission
 
-            systemHasCapsSwap = KeyRemapService.shared.detectCapsControlSwap()
-
-            if systemHasCapsSwap && !capsControlSwap {
-                capsControlSwap = true
-            }
-
             if hasAccessibilityPermission {
-                KeyRemapService.shared.applySettings(capsSwap: capsControlSwap, hyper: hyperKey, quote: quoteSwap)
+                KeyRemapService.shared.applySettings(hyper: hyperKey, quote: quoteSwap)
             }
         }
     }
