@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.7
+优化面板上Claude切换provider/mcp/skills的交互
+
 ## v0.3.6
 - 移除了上一版本的caps<->ctrl互换，在多键盘中会出现问题，做不到Karabiner那样整体代理了建议还是手动去设置中对不同键盘设定不同的修饰键切换规则
 
