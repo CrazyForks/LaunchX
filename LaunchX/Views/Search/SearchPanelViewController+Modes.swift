@@ -1813,6 +1813,32 @@ extension SearchPanelViewController {
         }
     }
 
+    // MARK: - Claude Code 行就地更新辅助方法
+
+    /// 生成 Claude Code 项的图标
+    private func makeClaudeCodeIcon(isActive: Bool) -> NSImage {
+        let icon: NSImage
+        if isActive {
+            let baseImage =
+                NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                ?? NSImage()
+            let config = NSImage.SymbolConfiguration(paletteColors: [
+                .systemGreen, .systemGreen.withAlphaComponent(0.15),
+            ])
+            icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+        } else {
+            icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+        }
+        icon.size = NSSize(width: 32, height: 32)
+        return icon
+    }
+
+    /// 刷新指定行（不重建整个列表、不改变滚动位置）
+    private func reloadClaudeCodeRows(at indices: [Int]) {
+        let indexSet = IndexSet(indices)
+        tableView.reloadData(forRowIndexes: indexSet, columnIndexes: IndexSet(integer: 0))
+    }
+
     /// 处理 Claude Code 模式中的选中项
     func handleClaudeCodeItemSelected(_ item: SearchResult) {
         guard item.isClaudeCodeItem, let itemType = item.claudeCodeItemType,
@@ -1833,8 +1859,18 @@ extension SearchPanelViewController {
             } catch {
                 print("Claude Code Switcher: 切换 Provider 失败: \(error)")
             }
-            // 切换后刷新列表
-            loadClaudeCodeItems()
+            // 就地更新所有 Provider 行的图标和状态
+            var rowsToReload: [Int] = []
+            for i in results.indices {
+                guard results[i].claudeCodeItemType == .provider,
+                    let rowIdStr = results[i].claudeCodeItemId
+                else { continue }
+                let isActive = rowIdStr == itemUUID.uuidString
+                results[i].icon = makeClaudeCodeIcon(isActive: isActive)
+                results[i].displayAlias = isActive ? "当前" : nil
+                rowsToReload.append(i)
+            }
+            reloadClaudeCodeRows(at: rowsToReload)
 
         case .mcp:
             // 切换 MCP 启用/禁用
@@ -1843,12 +1879,20 @@ extension SearchPanelViewController {
                     $0.id == itemUUID
                 })
             else { return }
+            let newEnabled = !server.isEnabled
             do {
                 try ClaudeMcpService.shared.toggleEnabled(server)
             } catch {
                 print("Claude Code Switcher: 切换 MCP 失败: \(error)")
             }
-            loadClaudeCodeItems()
+            // 就地更新该行
+            if let rowIndex = results.firstIndex(where: {
+                $0.claudeCodeItemId == itemUUID.uuidString
+            }) {
+                results[rowIndex].icon = makeClaudeCodeIcon(isActive: newEnabled)
+                results[rowIndex].displayAlias = newEnabled ? "已启用" : "已禁用"
+                reloadClaudeCodeRows(at: [rowIndex])
+            }
 
         case .skill:
             // 切换 Skill 启用/禁用
@@ -1857,12 +1901,20 @@ extension SearchPanelViewController {
                     $0.id == itemUUID
                 })
             else { return }
+            let newEnabled = !skill.isEnabled
             do {
                 try ClaudeSkillService.shared.toggleEnabled(skill)
             } catch {
                 print("Claude Code Switcher: 切换 Skill 失败: \(error)")
             }
-            loadClaudeCodeItems()
+            // 就地更新该行
+            if let rowIndex = results.firstIndex(where: {
+                $0.claudeCodeItemId == itemUUID.uuidString
+            }) {
+                results[rowIndex].icon = makeClaudeCodeIcon(isActive: newEnabled)
+                results[rowIndex].displayAlias = newEnabled ? "已启用" : "已禁用"
+                reloadClaudeCodeRows(at: [rowIndex])
+            }
         }
     }
 

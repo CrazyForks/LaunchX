@@ -27,9 +27,9 @@ struct SearchResult: Identifiable, Hashable {
     let id: UUID
     let name: String
     let path: String
-    let icon: NSImage
+    var icon: NSImage
     let isDirectory: Bool
-    let displayAlias: String?  // 用于显示的别名
+    var displayAlias: String?  // 用于显示的别名
     let isWebLink: Bool  // 是否为网页直达
     let isUtility: Bool  // 是否为实用工具
     let isSystemCommand: Bool  // 是否为系统命令
