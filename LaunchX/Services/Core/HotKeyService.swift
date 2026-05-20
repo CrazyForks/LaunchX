@@ -216,6 +216,12 @@ class HotKeyService: ObservableObject {
     /// Claude Code Switcher 快捷键 ID
     let claudeCodeHotKeyId: UInt32 = 8
 
+    var onCodexHotKeyPressed: (() -> Void)?
+    /// Codex Switcher 快捷键引用
+    var codexHotKeyRef: EventHotKeyRef?
+    /// Codex Switcher 快捷键 ID
+    let codexHotKeyId: UInt32 = 9
+
     // MARK: - 私有属性
 
     let hotKeySignature: OSType
@@ -343,6 +349,14 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == claudeCodeHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onClaudeCodeHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为 Codex Switcher 快捷键
+            if hotKeyID.id == codexHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onCodexHotKeyPressed?()
                 }
                 return noErr
             }

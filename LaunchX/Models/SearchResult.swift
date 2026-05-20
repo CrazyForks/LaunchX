@@ -55,6 +55,12 @@ struct SearchResult: Identifiable, Hashable {
     let claudeCodeItemType: ClaudeCodeItemType?  // 子项类型
     let claudeCodeItemId: String?  // 关联的实体 ID（Provider/MCP/Skill 的唯一标识）
 
+    // Codex Switcher 相关字段
+    let isCodexEntry: Bool  // 是否为 Codex Switcher 入口
+    let isCodexItem: Bool  // 是否为 Codex Switcher 子项
+    let codexItemType: CodexItemType?  // 子项类型
+    let codexItemId: String?  // 关联的实体 ID
+
     init(
         id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
@@ -66,7 +72,9 @@ struct SearchResult: Identifiable, Hashable {
         reminderIdentifier: String? = nil, reminderColor: NSColor? = nil,
         reminderURL: URL? = nil, processStats: String? = nil,
         isClaudeCodeEntry: Bool = false, isClaudeCodeItem: Bool = false,
-        claudeCodeItemType: ClaudeCodeItemType? = nil, claudeCodeItemId: String? = nil
+        claudeCodeItemType: ClaudeCodeItemType? = nil, claudeCodeItemId: String? = nil,
+        isCodexEntry: Bool = false, isCodexItem: Bool = false,
+        codexItemType: CodexItemType? = nil, codexItemId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -96,6 +104,10 @@ struct SearchResult: Identifiable, Hashable {
         self.isClaudeCodeItem = isClaudeCodeItem
         self.claudeCodeItemType = claudeCodeItemType
         self.claudeCodeItemId = claudeCodeItemId
+        self.isCodexEntry = isCodexEntry
+        self.isCodexItem = isCodexItem
+        self.codexItemType = codexItemType
+        self.codexItemId = codexItemId
     }
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {
@@ -110,6 +122,14 @@ struct SearchResult: Identifiable, Hashable {
 // MARK: - Claude Code Item Type
 
 enum ClaudeCodeItemType: String, Codable {
+    case provider
+    case mcp
+    case skill
+}
+
+// MARK: - Codex Item Type
+
+enum CodexItemType: String, Codable {
     case provider
     case mcp
     case skill

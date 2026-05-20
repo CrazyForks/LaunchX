@@ -1933,4 +1933,333 @@ extension SearchPanelViewController {
         resetState()
     }
 
+    // MARK: - Codex Switcher 模式
+
+    /// 直接进入 Codex Switcher 模式（由快捷键触发）
+    @objc func handleEnterCodexModeDirectly() {
+        PanelManager.shared.showPanel()
+        enterCodexMode()
+    }
+
+    /// 进入 Codex Switcher 模式
+    func enterCodexMode() {
+        if isInAnyExtensionMode && !isInCodexMode {
+            cleanupAllExtensionModes()
+        }
+
+        isInCodexMode = true
+        updateCodexModeUI()
+        loadCodexItems()
+        searchField.stringValue = ""
+    }
+
+    private func updateCodexModeUI() {
+        setPlaceholder("搜索 Provider / MCP / Skills...")
+    }
+
+    func loadCodexItems() {
+        var items: [SearchResult] = []
+
+        // Provider 分组
+        let providers = CodexProviderService.shared.getAllProviders()
+        let currentProviderId = CodexProviderService.shared.currentProvider?.id
+
+        let providerHeaderIcon =
+            NSImage(systemSymbolName: "server.rack", accessibilityDescription: "Provider")
+            ?? NSImage()
+        providerHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(SearchResult(
+            name: "Provider",
+            path: "",
+            icon: providerHeaderIcon,
+            isDirectory: false,
+            isSectionHeader: true
+        ))
+
+        for provider in providers {
+            let isActive = provider.id == currentProviderId
+            let icon = makeCodexIcon(isActive: isActive)
+            items.append(SearchResult(
+                name: provider.name,
+                path: "",
+                icon: icon,
+                isDirectory: false,
+                displayAlias: isActive ? "当前" : nil,
+                isCodexItem: true,
+                codexItemType: .provider,
+                codexItemId: provider.id.uuidString
+            ))
+        }
+
+        // MCP Server 分组
+        let mcpServers = CodexMcpService.shared.servers
+
+        let mcpHeaderIcon =
+            NSImage(systemSymbolName: "puzzlepiece.extension", accessibilityDescription: "MCP")
+            ?? NSImage()
+        mcpHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(SearchResult(
+            name: "MCP",
+            path: "",
+            icon: mcpHeaderIcon,
+            isDirectory: false,
+            isSectionHeader: true
+        ))
+
+        for server in mcpServers {
+            let icon = makeCodexIcon(isActive: server.isEnabled)
+            items.append(SearchResult(
+                name: server.name,
+                path: "",
+                icon: icon,
+                isDirectory: false,
+                displayAlias: server.isEnabled ? "已启用" : "已禁用",
+                isCodexItem: true,
+                codexItemType: .mcp,
+                codexItemId: server.id.uuidString
+            ))
+        }
+
+        // Skills 分组
+        let skills = CodexSkillService.shared.skills
+
+        let skillHeaderIcon =
+            NSImage(systemSymbolName: "star.circle", accessibilityDescription: "Skills")
+            ?? NSImage()
+        skillHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(SearchResult(
+            name: "Skills",
+            path: "",
+            icon: skillHeaderIcon,
+            isDirectory: false,
+            isSectionHeader: true
+        ))
+
+        for skill in skills {
+            let icon = makeCodexIcon(isActive: skill.isEnabled)
+            items.append(SearchResult(
+                name: skill.name,
+                path: "",
+                icon: icon,
+                isDirectory: false,
+                displayAlias: skill.isEnabled ? "已启用" : "已禁用",
+                isCodexItem: true,
+                codexItemType: .skill,
+                codexItemId: skill.id.uuidString
+            ))
+        }
+
+        results = items
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            for i in results.indices {
+                if !results[i].isSectionHeader {
+                    selectedIndex = i
+                    break
+                }
+            }
+            tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    func filterCodexItems(query: String) {
+        guard isInCodexMode else { return }
+
+        if query.isEmpty {
+            loadCodexItems()
+            return
+        }
+
+        let queryLower = query.lowercased()
+        var allItems: [SearchResult] = []
+        let currentProviderId = CodexProviderService.shared.currentProvider?.id
+
+        // Provider 过滤
+        let providers = CodexProviderService.shared.getAllProviders().filter {
+            $0.name.lowercased().contains(queryLower) ||
+            $0.providerId.lowercased().contains(queryLower) ||
+            $0.baseUrl.lowercased().contains(queryLower)
+        }
+        if !providers.isEmpty {
+            let headerIcon =
+                NSImage(systemSymbolName: "server.rack", accessibilityDescription: "Provider")
+                ?? NSImage()
+            headerIcon.size = NSSize(width: 32, height: 32)
+            allItems.append(SearchResult(
+                name: "Provider", path: "", icon: headerIcon,
+                isDirectory: false, isSectionHeader: true
+            ))
+            for provider in providers {
+                let isActive = provider.id == currentProviderId
+                let icon = makeCodexIcon(isActive: isActive)
+                allItems.append(SearchResult(
+                    name: provider.name, path: "", icon: icon,
+                    isDirectory: false, displayAlias: isActive ? "当前" : nil,
+                    isCodexItem: true, codexItemType: .provider, codexItemId: provider.id.uuidString
+                ))
+            }
+        }
+
+        // MCP 过滤
+        let mcpServers = CodexMcpService.shared.servers.filter {
+            $0.name.lowercased().contains(queryLower) ||
+            $0.configSummary.lowercased().contains(queryLower)
+        }
+        if !mcpServers.isEmpty {
+            let headerIcon =
+                NSImage(systemSymbolName: "puzzlepiece.extension", accessibilityDescription: "MCP")
+                ?? NSImage()
+            headerIcon.size = NSSize(width: 32, height: 32)
+            allItems.append(SearchResult(
+                name: "MCP", path: "", icon: headerIcon,
+                isDirectory: false, isSectionHeader: true
+            ))
+            for server in mcpServers {
+                let icon = makeCodexIcon(isActive: server.isEnabled)
+                allItems.append(SearchResult(
+                    name: server.name, path: "", icon: icon,
+                    isDirectory: false,
+                    displayAlias: server.isEnabled ? "已启用" : "已禁用",
+                    isCodexItem: true, codexItemType: .mcp, codexItemId: server.id.uuidString
+                ))
+            }
+        }
+
+        // Skills 过滤
+        let skills = CodexSkillService.shared.skills.filter {
+            $0.name.lowercased().contains(queryLower) ||
+            ($0.skillDescription?.lowercased().contains(queryLower) ?? false)
+        }
+        if !skills.isEmpty {
+            let headerIcon =
+                NSImage(systemSymbolName: "star.circle", accessibilityDescription: "Skills")
+                ?? NSImage()
+            headerIcon.size = NSSize(width: 32, height: 32)
+            allItems.append(SearchResult(
+                name: "Skills", path: "", icon: headerIcon,
+                isDirectory: false, isSectionHeader: true
+            ))
+            for skill in skills {
+                let icon = makeCodexIcon(isActive: skill.isEnabled)
+                allItems.append(SearchResult(
+                    name: skill.name, path: "", icon: icon,
+                    isDirectory: false,
+                    displayAlias: skill.isEnabled ? "已启用" : "已禁用",
+                    isCodexItem: true, codexItemType: .skill, codexItemId: skill.id.uuidString
+                ))
+            }
+        }
+
+        results = allItems
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            for i in results.indices {
+                if !results[i].isSectionHeader {
+                    selectedIndex = i
+                    break
+                }
+            }
+            tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    private func makeCodexIcon(isActive: Bool) -> NSImage {
+        let icon: NSImage
+        if isActive {
+            let baseImage =
+                NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+                ?? NSImage()
+            let config = NSImage.SymbolConfiguration(paletteColors: [
+                .systemGreen, .systemGreen.withAlphaComponent(0.15),
+            ])
+            icon = baseImage.withSymbolConfiguration(config) ?? baseImage
+        } else {
+            icon = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) ?? NSImage()
+        }
+        icon.size = NSSize(width: 32, height: 32)
+        return icon
+    }
+
+    private func reloadCodexRows(at indices: [Int]) {
+        let indexSet = IndexSet(indices)
+        let columnSet = IndexSet(integersIn: 0..<tableView.numberOfColumns)
+        tableView.reloadData(forRowIndexes: indexSet, columnIndexes: columnSet)
+    }
+
+    func handleCodexItemSelected(_ result: SearchResult) {
+        guard let itemType = result.codexItemType,
+              let itemIdStr = result.codexItemId,
+              let itemUUID = UUID(uuidString: itemIdStr) else { return }
+
+        switch itemType {
+        case .provider:
+            guard let targetProvider = CodexProviderService.shared.getAllProviders().first(where: { $0.id == itemUUID }),
+                  !targetProvider.isCurrent else { return }
+            do {
+                try CodexProviderService.shared.switchProvider(to: targetProvider)
+            } catch {
+                print("Codex Switcher: 切换 Provider 失败: \(error)")
+            }
+            // 就地更新所有 Provider 行的图标和状态
+            for i in results.indices {
+                if results[i].codexItemType == .provider, let pid = results[i].codexItemId {
+                    let isCurrent = pid == targetProvider.id.uuidString
+                    results[i].icon = makeCodexIcon(isActive: isCurrent)
+                    results[i].displayAlias = isCurrent ? "当前" : nil
+                    reloadCodexRows(at: [i])
+                }
+            }
+
+        case .mcp:
+            guard let server = CodexMcpService.shared.servers.first(where: { $0.id == itemUUID }) else { return }
+            let newEnabled = !server.isEnabled
+            do {
+                try CodexMcpService.shared.toggleEnabled(server)
+            } catch {
+                print("Codex Switcher: 切换 MCP 失败: \(error)")
+            }
+            if let rowIndex = results.firstIndex(where: { $0.codexItemId == itemUUID.uuidString }) {
+                results[rowIndex].icon = makeCodexIcon(isActive: newEnabled)
+                results[rowIndex].displayAlias = newEnabled ? "已启用" : "已禁用"
+                reloadCodexRows(at: [rowIndex])
+            }
+
+        case .skill:
+            guard let skill = CodexSkillService.shared.skills.first(where: { $0.id == itemUUID }) else { return }
+            let newEnabled = !skill.isEnabled
+            do {
+                try CodexSkillService.shared.toggleEnabled(skill)
+            } catch {
+                print("Codex Switcher: 切换 Skill 失败: \(error)")
+            }
+            if let rowIndex = results.firstIndex(where: { $0.codexItemId == itemUUID.uuidString }) {
+                results[rowIndex].icon = makeCodexIcon(isActive: newEnabled)
+                results[rowIndex].displayAlias = newEnabled ? "已启用" : "已禁用"
+                reloadCodexRows(at: [rowIndex])
+            }
+        }
+    }
+
+    /// 退出 Codex Switcher 模式
+    func exitCodexMode() {
+        guard isInCodexMode else { return }
+
+        isInCodexMode = false
+        restoreNormalModeUI()
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
+    }
+
 }

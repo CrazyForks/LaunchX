@@ -118,6 +118,9 @@ extension SearchPanelViewController {
         // 检查是否匹配 Claude Code Switcher 别名
         let claudeCodeEntryResult = checkClaudeCodeAliasMatch(query: query)
 
+        // 检查是否匹配 Codex Switcher 别名
+        let codexEntryResult = checkCodexAliasMatch(query: query)
+
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
@@ -133,6 +136,9 @@ extension SearchPanelViewController {
         }
         if let claudeCodeEntry = claudeCodeEntryResult {
             finalResults.append(claudeCodeEntry)
+        }
+        if let codexEntry = codexEntryResult {
+            finalResults.append(codexEntry)
         }
 
         if sortedResults.isEmpty {
@@ -240,6 +246,31 @@ extension SearchPanelViewController {
             isDirectory: false,
             displayAlias: settings.alias,
             isClaudeCodeEntry: true
+        )
+    }
+
+    /// 检查 Codex Switcher 别名匹配
+    func checkCodexAliasMatch(query: String) -> SearchResult? {
+        let settings = CodexSwitcherSettings.load()
+        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
+
+        let queryLower = query.lowercased()
+        let aliasLower = settings.alias.lowercased()
+
+        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
+
+        let cxIcon =
+            NSImage(systemSymbolName: "cpu", accessibilityDescription: "Codex CLI")
+            ?? NSImage()
+        cxIcon.size = NSSize(width: 32, height: 32)
+
+        return SearchResult(
+            name: "Codex CLI",
+            path: "cx-entry",
+            icon: cxIcon,
+            isDirectory: false,
+            displayAlias: settings.alias,
+            isCodexEntry: true
         )
     }
 

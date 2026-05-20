@@ -9,6 +9,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case terminal = "终端"
     case reminders = "提醒事项"
     case claudeCode = "Claude Code"
+    case codex = "Codex CLI"
 
     var id: String { rawValue }
 
@@ -37,6 +38,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .terminal: return "terminal.fill"
         case .reminders: return "checklist"
         case .claudeCode: return "cpu"
+        case .codex: return "cpu"
         }
     }
 
@@ -50,6 +52,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .terminal: return .gray
         case .reminders: return .purple
         case .claudeCode: return .brown
+        case .codex: return .orange
         }
     }
 }
@@ -136,6 +139,8 @@ struct AdvancedExtensionsView: View {
             RemindersSettingsView()
         case .claudeCode:
             ClaudeCodeSettingsView()
+        case .codex:
+            CodexSettingsView()
         }
     }
 }

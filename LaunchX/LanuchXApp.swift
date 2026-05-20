@@ -397,6 +397,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .init("enterClaudeCodeModeDirectly"), object: nil)
         }
 
+        // 设置 Codex 快捷键回调
+        HotKeyService.shared.onCodexHotKeyPressed = {
+            let settings = CodexSwitcherSettings.load()
+            guard settings.isEnabled else { return }
+            PanelManager.shared.showPanel()
+            NotificationCenter.default.post(name: .init("enterCodexModeDirectly"), object: nil)
+        }
+
         // 设置选词翻译快捷键回调
         HotKeyService.shared.onTranslateSelectionHotKeyPressed = {
             let settings = AITranslateSettings.load()
@@ -437,6 +445,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 加载 Claude Code 快捷键
         HotKeyService.shared.loadClaudeCodeHotKey()
+
+        // 加载 Codex 快捷键
+        HotKeyService.shared.loadCodexHotKey()
 
         // 启动剪贴板监听
         ClipboardService.shared.startMonitoring()
