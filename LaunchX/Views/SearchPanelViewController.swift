@@ -34,7 +34,7 @@ class SearchPanelViewController: NSViewController {
     /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA、Claude Code等）
     var isInAnyExtensionMode: Bool {
         return isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInClaudeCodeMode
+            || isInBookmarkMode || isIn2FAMode || isInClaudeCodeMode || isInCodexMode
     }
 
     // IDE 项目模式状态
@@ -68,6 +68,9 @@ class SearchPanelViewController: NSViewController {
 
     // Claude Code Switcher 模式状态
     var isInClaudeCodeMode: Bool = false
+
+    // Codex Switcher 模式状态
+    var isInCodexMode: Bool = false
 
     // IP 查询结果
     var ipQueryResults: [(label: String, ip: String)] = []
@@ -365,6 +368,14 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnterClaudeCodeModeDirectly),
             name: .enterClaudeCodeModeDirectly,
+            object: nil
+        )
+
+        // 监听直接进入 Codex 模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnterCodexModeDirectly),
+            name: .enterCodexModeDirectly,
             object: nil
         )
 

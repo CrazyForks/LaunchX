@@ -944,6 +944,12 @@ extension SearchPanelViewController {
             return
         }
 
+        // Codex 模式：处理选中项（切换 Provider/MCP/Skill）
+        if isInCodexMode, item.isClaudeCodeItem {
+            handleCodexItemSelected(item)
+            return
+        }
+
         // 书签：打开书签 URL
         if item.isBookmark {
             BookmarkService.shared.open(

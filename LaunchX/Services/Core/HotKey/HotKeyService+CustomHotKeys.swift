@@ -513,4 +513,49 @@ extension HotKeyService {
         }
     }
 
+    // MARK: - Codex Switcher 快捷键
+
+    /// 注册 Codex Switcher 快捷键
+    func registerCodexHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterCodexHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: codexHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            codexHotKeyRef = hotKeyRef
+            print("HotKeyService: Registered Codex HotKey (Code: \(keyCode), Mods: \(modifiers))")
+        } else {
+            print("HotKeyService: Failed to register Codex hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销 Codex Switcher 快捷键
+    func unregisterCodexHotKey() {
+        if let ref = codexHotKeyRef {
+            UnregisterEventHotKey(ref)
+            codexHotKeyRef = nil
+            print("HotKeyService: Unregistered Codex HotKey")
+        }
+    }
+
+    /// 加载 Codex Switcher 快捷键设置
+    func loadCodexHotKey() {
+        let settings = CodexSwitcherSettings.load()
+        if settings.hotKeyCode != 0 {
+            registerCodexHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
 }
