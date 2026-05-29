@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.8
+新增 codex 供应商简单配置
+
 ## v0.3.7
 优化面板上Claude切换provider/mcp/skills的交互
 
