@@ -2,7 +2,8 @@ import AppKit
 
 // MARK: - Result Cell View
 
-/// 优化版 Cell：用 isHidden 控制元素可见性替代频繁约束切换，减少每次 configure 的 layout 开销
+/// 文字（名称+路径）和右侧装饰均与左侧图标垂直居中对齐
+/// 无路径时名称自身居中，有路径时名称上移让名称+路径整体居中
 class ResultCellView: NSView {
     // MARK: - Subviews
 
@@ -13,7 +14,7 @@ class ResultCellView: NSView {
     private let pathLabel = NSTextField(labelWithString: "")
     private let backgroundView = NSView()
 
-    // 右侧装饰元素容器（箭头/统计/链接），用 StackView 自动管理，isHidden 时自动折叠
+    /// 右侧装饰元素（箭头/统计/链接），与图标垂直居中
     private let rightAccessoryStack = NSStackView()
 
     private let arrowIndicator = NSImageView()
@@ -24,11 +25,17 @@ class ResultCellView: NSView {
     private let memoryIcon = NSImageView()
     private let memoryLabel = NSTextField(labelWithString: "")
 
-    // MARK: - 常量约束引用（只设置一次，不切换）
-
-    private var nameLabelToAccessoryConstraint: NSLayoutConstraint!
+    // 动态调整的约束
+    private var nameCenterYConstraint: NSLayoutConstraint!
+    private var pathTopConstraint: NSLayoutConstraint!
 
     var onIconClick: (() -> Void)?
+
+    // COLORS: cached at init to avoid the extra compute on every cell configuration
+    private let labelColor = NSColor.labelColor
+    private let secondaryLabelColor = NSColor.secondaryLabelColor
+    private let tertiaryLabelColor = NSColor.tertiaryLabelColor
+    private let whiteColor = NSColor.white
 
     // MARK: - Init
 
@@ -68,6 +75,14 @@ class ResultCellView: NSView {
         nameLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         addSubview(nameLabel)
 
+        // Path label
+        pathLabel.font = .systemFont(ofSize: 11)
+        pathLabel.textColor = secondaryLabelColor
+        pathLabel.lineBreakMode = .byTruncatingMiddle
+        pathLabel.translatesAutoresizingMaskIntoConstraints = false
+        pathLabel.isHidden = true
+        addSubview(pathLabel)
+
         // Alias badge
         aliasBadgeView.wantsLayer = true
         aliasBadgeView.layer?.cornerRadius = 6
@@ -77,19 +92,12 @@ class ResultCellView: NSView {
         addSubview(aliasBadgeView)
 
         aliasLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
-        aliasLabel.textColor = .secondaryLabelColor
+        aliasLabel.textColor = secondaryLabelColor
         aliasLabel.translatesAutoresizingMaskIntoConstraints = false
         aliasLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        addSubview(aliasLabel)
+        aliasBadgeView.addSubview(aliasLabel)
 
-        // Path label
-        pathLabel.font = .systemFont(ofSize: 11)
-        pathLabel.textColor = .secondaryLabelColor
-        pathLabel.lineBreakMode = .byTruncatingMiddle
-        pathLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(pathLabel)
-
-        // Right accessory stack — all right-side elements go here
+        // Right accessory stack
         rightAccessoryStack.translatesAutoresizingMaskIntoConstraints = false
         rightAccessoryStack.isHidden = true
         rightAccessoryStack.orientation = .horizontal
@@ -98,66 +106,11 @@ class ResultCellView: NSView {
         rightAccessoryStack.distribution = .fill
         addSubview(rightAccessoryStack)
 
-        // Arrow indicator
-        arrowIndicator.image = NSImage(
-            systemSymbolName: "arrow.right.to.line",
-            accessibilityDescription: "Tab to open")
-        arrowIndicator.contentTintColor = .secondaryLabelColor
-        arrowIndicator.translatesAutoresizingMaskIntoConstraints = false
-        arrowIndicator.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        arrowIndicator.heightAnchor.constraint(equalToConstant: 16).isActive = true
-        rightAccessoryStack.addArrangedSubview(arrowIndicator)
+        setupRightAccessoryViews()
 
-        // Link indicator
-        linkIndicator.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "Has URL")
-        linkIndicator.contentTintColor = .systemBlue
-        linkIndicator.translatesAutoresizingMaskIntoConstraints = false
-        linkIndicator.widthAnchor.constraint(equalToConstant: 13).isActive = true
-        linkIndicator.heightAnchor.constraint(equalToConstant: 13).isActive = true
-        rightAccessoryStack.addArrangedSubview(linkIndicator)
-
-        // Port label
-        portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
-        portLabel.textColor = .secondaryLabelColor
-        portLabel.translatesAutoresizingMaskIntoConstraints = false
-        portLabel.setContentHuggingPriority(.required, for: .horizontal)
-        portLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        portLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
-        rightAccessoryStack.addArrangedSubview(portLabel)
-
-        // CPU icon
-        cpuIcon.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
-        cpuIcon.contentTintColor = .secondaryLabelColor
-        cpuIcon.translatesAutoresizingMaskIntoConstraints = false
-        cpuIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
-        cpuIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
-        rightAccessoryStack.addArrangedSubview(cpuIcon)
-
-        // CPU label
-        cpuLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        cpuLabel.textColor = .secondaryLabelColor
-        cpuLabel.translatesAutoresizingMaskIntoConstraints = false
-        cpuLabel.widthAnchor.constraint(equalToConstant: 45).isActive = true
-        rightAccessoryStack.addArrangedSubview(cpuLabel)
-
-        // Memory icon
-        memoryIcon.image = NSImage(systemSymbolName: "memorychip", accessibilityDescription: "Memory")
-        memoryIcon.contentTintColor = .secondaryLabelColor
-        memoryIcon.translatesAutoresizingMaskIntoConstraints = false
-        memoryIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
-        memoryIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
-        rightAccessoryStack.addArrangedSubview(memoryIcon)
-
-        // Memory label
-        memoryLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        memoryLabel.textColor = .secondaryLabelColor
-        memoryLabel.translatesAutoresizingMaskIntoConstraints = false
-        memoryLabel.widthAnchor.constraint(equalToConstant: 60).isActive = true
-        rightAccessoryStack.addArrangedSubview(memoryLabel)
-
-        // 固定约束 — 只设置一次，后续用 isHidden 控制
-        nameLabelToAccessoryConstraint = nameLabel.trailingAnchor.constraint(
-            lessThanOrEqualTo: rightAccessoryStack.leadingAnchor, constant: -12)
+        // 动态约束（后续通过 constant 调整，不切换 isActive）
+        nameCenterYConstraint = nameLabel.centerYAnchor.constraint(equalTo: iconView.centerYAnchor)
+        pathTopConstraint = pathLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2)
 
         NSLayoutConstraint.activate([
             // Background
@@ -172,13 +125,18 @@ class ResultCellView: NSView {
             iconView.widthAnchor.constraint(equalToConstant: 24),
             iconView.heightAnchor.constraint(equalToConstant: 24),
 
-            // Name label
+            // Name label — dynamic centerY (adjusted for path presence)
             nameLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
-            nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            nameLabelToAccessoryConstraint,
-
-            // Name trailing fallback
+            nameCenterYConstraint,
             nameLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: rightAccessoryStack.leadingAnchor, constant: -12),
+            nameLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -20),
+
+            // Path label — below name, same leading
+            pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            pathTopConstraint,
+            pathLabel.trailingAnchor.constraint(
                 lessThanOrEqualTo: trailingAnchor, constant: -20),
 
             // Alias badge
@@ -190,35 +148,79 @@ class ResultCellView: NSView {
             aliasLabel.topAnchor.constraint(equalTo: aliasBadgeView.topAnchor, constant: 2),
             aliasLabel.bottomAnchor.constraint(equalTo: aliasBadgeView.bottomAnchor, constant: -2),
 
-            // Right accessory stack
+            // Right accessory stack — centered with icon
             rightAccessoryStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
-            rightAccessoryStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            // Path label
-            pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            pathLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
-            pathLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingAnchor, constant: -20),
+            rightAccessoryStack.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
         ])
+    }
+
+    private func setupRightAccessoryViews() {
+        arrowIndicator.image = NSImage(
+            systemSymbolName: "arrow.right.to.line",
+            accessibilityDescription: "Tab to open")
+        arrowIndicator.contentTintColor = secondaryLabelColor
+        arrowIndicator.translatesAutoresizingMaskIntoConstraints = false
+        arrowIndicator.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        arrowIndicator.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        rightAccessoryStack.addArrangedSubview(arrowIndicator)
+
+        linkIndicator.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "Has URL")
+        linkIndicator.contentTintColor = .systemBlue
+        linkIndicator.translatesAutoresizingMaskIntoConstraints = false
+        linkIndicator.widthAnchor.constraint(equalToConstant: 13).isActive = true
+        linkIndicator.heightAnchor.constraint(equalToConstant: 13).isActive = true
+        rightAccessoryStack.addArrangedSubview(linkIndicator)
+
+        portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        portLabel.textColor = secondaryLabelColor
+        portLabel.translatesAutoresizingMaskIntoConstraints = false
+        portLabel.setContentHuggingPriority(.required, for: .horizontal)
+        portLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        portLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        rightAccessoryStack.addArrangedSubview(portLabel)
+
+        cpuIcon.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
+        cpuIcon.contentTintColor = secondaryLabelColor
+        cpuIcon.translatesAutoresizingMaskIntoConstraints = false
+        cpuIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        cpuIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        rightAccessoryStack.addArrangedSubview(cpuIcon)
+
+        cpuLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        cpuLabel.textColor = secondaryLabelColor
+        cpuLabel.translatesAutoresizingMaskIntoConstraints = false
+        cpuLabel.widthAnchor.constraint(equalToConstant: 45).isActive = true
+        rightAccessoryStack.addArrangedSubview(cpuLabel)
+
+        memoryIcon.image = NSImage(systemSymbolName: "memorychip", accessibilityDescription: "Memory")
+        memoryIcon.contentTintColor = secondaryLabelColor
+        memoryIcon.translatesAutoresizingMaskIntoConstraints = false
+        memoryIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        memoryIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        rightAccessoryStack.addArrangedSubview(memoryIcon)
+
+        memoryLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        memoryLabel.textColor = secondaryLabelColor
+        memoryLabel.translatesAutoresizingMaskIntoConstraints = false
+        memoryLabel.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        rightAccessoryStack.addArrangedSubview(memoryLabel)
     }
 
     // MARK: - Configure
 
     func configure(with item: SearchResult, isSelected: Bool, hideArrow: Bool = false) {
-        // 分组标题特殊处理
         if item.isSectionHeader {
             configureSectionHeader(with: item)
             return
         }
 
-        // 恢复普通模式
         iconView.isHidden = false
-        nameLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        nameLabel.textColor = .labelColor
+        nameLabel.isHidden = false
 
-        // ---- 左侧内容 ----
+        // ---- 名称 ----
         nameLabel.stringValue = item.name
 
+        // ---- Alias badge ----
         if let alias = item.displayAlias, !alias.isEmpty {
             aliasLabel.stringValue = alias
             aliasBadgeView.isHidden = false
@@ -230,20 +232,27 @@ class ResultCellView: NSView {
         // ---- 图标 ----
         configureIcon(for: item, isSelected: isSelected)
 
-        // ---- 路径标签（仅文件/文件夹显示） ----
+        // ---- 路径/副标题 + 垂直对齐 ----
         let isApp = item.path.hasSuffix(".app")
         let isEntry = item.isBookmarkEntry || item.is2FAEntry || item.isMemeEntry
             || item.isFavoriteEntry
         let hasProcessStats = item.processStats != nil && !item.processStats!.isEmpty
         let isReminder = item.isReminder
+
         let showPath =
             !isApp && !item.isWebLink && !item.isUtility && !item.isSystemCommand
             && !isEntry && !hasProcessStats && !isReminder && !item.isClaudeCodeItem
 
         pathLabel.isHidden = !showPath
-        pathLabel.stringValue = showPath ? item.path : ""
+        if showPath {
+            pathLabel.stringValue = item.path
+            // 有副标题：名称上移使名称+路径整体与图标居中
+            // pathLabel 高度 ≈ 13pt (11pt font), spacing = 2, 总偏移 = (13+2)/2 ≈ 7.5
+            nameCenterYConstraint.constant = -7
+        } else {
+            nameCenterYConstraint.constant = 0
+        }
 
-        // 名称字体：高级条目加粗加大
         let isPremiumItem =
             isApp || item.isWebLink || item.isUtility || item.isSystemCommand
             || isEntry || hasProcessStats || isReminder || item.isClaudeCodeItem
@@ -251,7 +260,7 @@ class ResultCellView: NSView {
             ? .systemFont(ofSize: 14, weight: .medium)
             : .systemFont(ofSize: 13, weight: .medium)
 
-        // ---- 右侧装饰：用 StackView 的 isHidden 控制，无需切换约束 ----
+        // ---- 右侧装饰 ----
         configureRightAccessories(
             item: item, isSelected: isSelected, hideArrow: hideArrow,
             hasProcessStats: hasProcessStats, isReminder: isReminder)
@@ -267,11 +276,11 @@ class ResultCellView: NSView {
             let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
             iconView.image = item.icon.withSymbolConfiguration(config)
             let color: NSColor = item.reminderColor ?? .systemOrange
-            iconView.contentTintColor = isSelected ? .white : color
+            iconView.contentTintColor = isSelected ? whiteColor : color
         } else {
             iconView.image = item.icon
             if item.isClaudeCodeItem && item.path == "active" {
-                iconView.contentTintColor = isSelected ? .white : nil
+                iconView.contentTintColor = isSelected ? whiteColor : nil
             } else {
                 iconView.contentTintColor = nil
             }
@@ -282,13 +291,11 @@ class ResultCellView: NSView {
         item: SearchResult, isSelected: Bool, hideArrow: Bool,
         hasProcessStats: Bool, isReminder: Bool
     ) {
-        // 分组标题下隐藏所有装饰
         guard !item.isSectionHeader else {
-            setRightAccessories(hidden: true)
+            rightAccessoryStack.isHidden = true
             return
         }
 
-        // 决定显示哪些元素
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !item.path.hasSuffix(".app")
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
@@ -299,20 +306,16 @@ class ResultCellView: NSView {
             !hideArrow && !hasProcessStats
             && (isIDE || isFolder || isQueryWebLink || item.isUtility || isEntry)
 
-        // 链接指示器
+        arrowIndicator.isHidden = !showArrow
+
         if isReminder {
-            let hasLink = item.reminderURL != nil
-            linkIndicator.isHidden = !hasLink
+            linkIndicator.isHidden = item.reminderURL == nil
             linkIndicator.contentTintColor = isSelected
-                ? .white.withAlphaComponent(0.9) : .systemBlue
+                ? whiteColor.withAlphaComponent(0.9) : .systemBlue
         } else {
             linkIndicator.isHidden = true
         }
 
-        // 箭头
-        arrowIndicator.isHidden = !showArrow
-
-        // 进程统计
         if hasProcessStats && !isReminder {
             let stats = item.processStats!
             let parts = stats.components(separatedBy: "|")
@@ -331,13 +334,12 @@ class ResultCellView: NSView {
             memoryIcon.isHidden = false
             memoryLabel.isHidden = false
         } else if isReminder, let stats = item.processStats {
-            // 提醒事项用 portLabel 显示日期/列表
             portLabel.isHidden = false
             portLabel.stringValue = stats
             portLabel.alignment = .right
             portLabel.lineBreakMode = .byTruncatingTail
             portLabel.textColor = isSelected
-                ? .white.withAlphaComponent(0.9) : .secondaryLabelColor
+                ? whiteColor.withAlphaComponent(0.9) : secondaryLabelColor
             portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
             portLabel.setContentHuggingPriority(.required, for: .horizontal)
             cpuIcon.isHidden = true
@@ -352,45 +354,39 @@ class ResultCellView: NSView {
             memoryLabel.isHidden = true
         }
 
-        // 整体显示/隐藏：有任何子元素可见就显示整个 Stack
         let anyAccessoryVisible = !arrowIndicator.isHidden || !linkIndicator.isHidden
             || !portLabel.isHidden || !cpuLabel.isHidden || !memoryLabel.isHidden
-        setRightAccessories(hidden: !anyAccessoryVisible)
-    }
-
-    /// 控制右侧装饰 Stack 和名称约束（用 isHidden 触发 Stack 自动折叠）
-    private func setRightAccessories(hidden: Bool) {
-        rightAccessoryStack.isHidden = hidden
+        rightAccessoryStack.isHidden = !anyAccessoryVisible
     }
 
     private func applySelectionStyle(isSelected: Bool, isReminder: Bool) {
         if isSelected {
             backgroundView.layer?.backgroundColor =
                 NSColor.controlAccentColor.withAlphaComponent(0.85).cgColor
-            nameLabel.textColor = .white
-            pathLabel.textColor = .white.withAlphaComponent(0.8)
-            arrowIndicator.contentTintColor = .white.withAlphaComponent(0.8)
-            linkIndicator.contentTintColor = .white.withAlphaComponent(0.9)
+            nameLabel.textColor = whiteColor
+            pathLabel.textColor = whiteColor.withAlphaComponent(0.8)
+            arrowIndicator.contentTintColor = whiteColor.withAlphaComponent(0.8)
+            linkIndicator.contentTintColor = whiteColor.withAlphaComponent(0.9)
             portLabel.textColor = isReminder
-                ? .white.withAlphaComponent(0.8) : .white.withAlphaComponent(0.9)
-            cpuIcon.contentTintColor = .white.withAlphaComponent(0.7)
-            cpuLabel.textColor = .white.withAlphaComponent(0.8)
-            memoryIcon.contentTintColor = .white.withAlphaComponent(0.7)
-            memoryLabel.textColor = .white.withAlphaComponent(0.8)
-            aliasLabel.textColor = .white.withAlphaComponent(0.9)
-            aliasBadgeView.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
+                ? whiteColor.withAlphaComponent(0.8) : whiteColor.withAlphaComponent(0.9)
+            cpuIcon.contentTintColor = whiteColor.withAlphaComponent(0.7)
+            cpuLabel.textColor = whiteColor.withAlphaComponent(0.8)
+            memoryIcon.contentTintColor = whiteColor.withAlphaComponent(0.7)
+            memoryLabel.textColor = whiteColor.withAlphaComponent(0.8)
+            aliasLabel.textColor = whiteColor.withAlphaComponent(0.9)
+            aliasBadgeView.layer?.backgroundColor = whiteColor.withAlphaComponent(0.2).cgColor
         } else {
             backgroundView.layer?.backgroundColor = NSColor.clear.cgColor
-            nameLabel.textColor = .labelColor
-            pathLabel.textColor = .secondaryLabelColor
-            arrowIndicator.contentTintColor = .secondaryLabelColor
+            nameLabel.textColor = labelColor
+            pathLabel.textColor = secondaryLabelColor
+            arrowIndicator.contentTintColor = secondaryLabelColor
             linkIndicator.contentTintColor = .systemBlue
-            portLabel.textColor = .secondaryLabelColor
-            cpuIcon.contentTintColor = .tertiaryLabelColor
-            cpuLabel.textColor = .secondaryLabelColor
-            memoryIcon.contentTintColor = .tertiaryLabelColor
-            memoryLabel.textColor = .secondaryLabelColor
-            aliasLabel.textColor = .secondaryLabelColor
+            portLabel.textColor = secondaryLabelColor
+            cpuIcon.contentTintColor = tertiaryLabelColor
+            cpuLabel.textColor = secondaryLabelColor
+            memoryIcon.contentTintColor = tertiaryLabelColor
+            memoryLabel.textColor = secondaryLabelColor
+            aliasLabel.textColor = secondaryLabelColor
             aliasBadgeView.layer?.backgroundColor =
                 NSColor.systemGray.withAlphaComponent(0.25).cgColor
         }
@@ -401,11 +397,12 @@ class ResultCellView: NSView {
         aliasBadgeView.isHidden = true
         aliasLabel.stringValue = ""
         pathLabel.isHidden = true
-        setRightAccessories(hidden: true)
+        rightAccessoryStack.isHidden = true
         backgroundView.layer?.backgroundColor = NSColor.clear.cgColor
+        nameCenterYConstraint.constant = 0
 
         nameLabel.stringValue = item.name
         nameLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.textColor = secondaryLabelColor
     }
 }
