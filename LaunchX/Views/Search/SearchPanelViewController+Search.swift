@@ -105,16 +105,8 @@ extension SearchPanelViewController {
             let oldResults = results
             results = []
 
-            // 1. 优先显示待办提醒 (TODO)
+            // 1. 显示待办提醒 (TODO)
             if !reminderResults.isEmpty {
-                results.append(
-                    SearchResult(
-                        name: "提醒事项",
-                        path: "",
-                        icon: NSImage(),
-                        isDirectory: false,
-                        isSectionHeader: true
-                    ))
                 results.append(contentsOf: reminderResults.prefix(5))
             }
 
@@ -122,15 +114,6 @@ extension SearchPanelViewController {
             let defaultWindowMode =
                 UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
             if defaultWindowMode == "full" && !recentApps.isEmpty {
-                // 始终为最近使用添加标题，保持样式统一
-                results.append(
-                    SearchResult(
-                        name: "最近使用",
-                        path: "",
-                        icon: NSImage(),
-                        isDirectory: false,
-                        isSectionHeader: true
-                    ))
                 results.append(contentsOf: recentApps)
                 isShowingRecents = true
             }
