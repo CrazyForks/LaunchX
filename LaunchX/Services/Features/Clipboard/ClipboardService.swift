@@ -101,21 +101,43 @@ final class ClipboardService: ObservableObject {
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
 
-        // 注意：不再检查当前前台应用是否为 LaunchX
-        // 因为截图工具等应用可能在后台运行，而 LaunchX 在前台
-        // 我们仍然需要记录这些截图
-
         // 只检查用户配置的忽略列表中的应用
         if shouldIgnoreCurrentApp() {
             print("[ClipboardService] Ignored clipboard from excluded app")
             return
         }
 
-        // 解析剪贴板内容
-        if let item = parseClipboardContent() {
-            addItem(item)
-            print("[ClipboardService] Added new item: \(item.contentType.displayName)")
+        // 图片解析（PNG 重编码）移到后台线程，避免轮询时阻塞主线程
+        if hasImageInClipboard() {
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                if let item = self?.parseClipboardContent() {
+                    DispatchQueue.main.async {
+                        self?.addItem(item)
+                        print("[ClipboardService] Added new item: \(item.contentType.displayName)")
+                    }
+                }
+            }
+        } else {
+            // 非图片内容在主线程直接解析（开销很小）
+            if let item = parseClipboardContent() {
+                addItem(item)
+                print("[ClipboardService] Added new item: \(item.contentType.displayName)")
+            }
         }
+    }
+
+    /// 快速检测剪贴板是否包含图片（不进行完整的图片解析）
+    private func hasImageInClipboard() -> Bool {
+        let types = pasteboard.types ?? []
+        for type in types {
+            let raw = type.rawValue.lowercased()
+            if raw.contains("image") || raw.contains("png") || raw.contains("tiff")
+                || raw.contains("jpeg") || raw.contains("heic")
+            {
+                return true
+            }
+        }
+        return false
     }
 
     /// 检查是否应该忽略当前前台应用

@@ -449,9 +449,9 @@ final class SearchEngine: ObservableObject {
             return
         }
 
-        // 重置定时器，延迟 500ms 后批量处理
+        // 重置定时器，延迟 300ms 后批量处理（与 FSEvents 1s 防抖配合，总延迟 ≤ 1.3s）
         fsEventTimer?.invalidate()
-        fsEventTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
+        fsEventTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
             [weak self] _ in
             self?.processFSEventsBatch()
         }
@@ -731,6 +731,13 @@ final class SearchEngine: ObservableObject {
     func searchSync(text: String) -> [SearchResult] {
         guard !text.isEmpty else { return [] }
 
+        // Check cache first — duplicate queries hit O(1) instead of full Trie scan
+        if let cached = searchCache.getCachedResults(for: text) {
+            return performanceMonitor.measureSearch(query: text, cacheHit: true) {
+                cached
+            }
+        }
+
         return performanceMonitor.measureSearch(query: text, cacheHit: false) {
             let config = searchConfig
 
@@ -748,6 +755,9 @@ final class SearchEngine: ObservableObject {
             // 添加书签搜索结果
             let bookmarkResults = searchBookmarks(query: text)
             results.append(contentsOf: bookmarkResults)
+
+            // Cache results for duplicate queries (e.g., user backspacing)
+            searchCache.cacheResults(results, for: text)
 
             return results
         }

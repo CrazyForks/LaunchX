@@ -55,6 +55,44 @@ extension SearchPanelViewController {
         }
     }
 
+    /// 增量更新 TableView，避免全量 reloadData 造成不必要的 Cell 重绘
+    /// 当结果数量变化时使用 insert/remove 动画，否则仅刷新变化行
+    private func updateTableViewIncrementally(oldResults: [SearchResult], newResults: [SearchResult]) {
+        let oldCount = oldResults.count
+        let newCount = newResults.count
+
+        // 简单策略：如果行数变化较大（> 3 行），直接全量刷新更高效
+        guard abs(newCount - oldCount) <= 3 && oldCount > 0 && newCount > 0 else {
+            tableView.reloadData()
+            return
+        }
+
+        tableView.beginUpdates()
+
+        if newCount > oldCount {
+            // 插入行
+            let insertRange = oldCount..<newCount
+            let indexSet = IndexSet(integersIn: insertRange)
+            tableView.insertRows(at: indexSet, withAnimation: [])
+        } else if newCount < oldCount {
+            // 删除行
+            let removeRange = newCount..<oldCount
+            let indexSet = IndexSet(integersIn: removeRange)
+            tableView.removeRows(at: indexSet, withAnimation: [])
+        }
+
+        // 刷新重叠区域的单元格（内容变化但行数不变时）
+        let overlapCount = min(oldCount, newCount)
+        if overlapCount > 0 {
+            let columnIndexes = IndexSet(integer: 0)
+            tableView.reloadData(
+                forRowIndexes: IndexSet(integersIn: 0..<overlapCount),
+                columnIndexes: columnIndexes)
+        }
+
+        tableView.endUpdates()
+    }
+
     func performSearch(_ query: String) {
         guard !query.isEmpty else {
             // 如果在扩展模式下进入了空搜索逻辑，直接返回，避免覆盖扩展模式的结果
@@ -64,6 +102,7 @@ extension SearchPanelViewController {
 
             selectedIndex = 0
             isShowingRecents = false
+            let oldResults = results
             results = []
 
             // 1. 优先显示待办提醒 (TODO)
@@ -96,7 +135,7 @@ extension SearchPanelViewController {
                 isShowingRecents = true
             }
 
-            tableView.reloadData()
+            updateTableViewIncrementally(oldResults: oldResults, newResults: results)
             updateVisibility()
             return
         }
@@ -144,9 +183,10 @@ extension SearchPanelViewController {
             finalResults.append(contentsOf: filteredDefaultLinks)
         }
 
+        let oldResults = results
         results = finalResults
         selectedIndex = results.isEmpty ? 0 : 0
-        tableView.reloadData()
+        updateTableViewIncrementally(oldResults: oldResults, newResults: finalResults)
         updateVisibility()
 
         if !results.isEmpty {
