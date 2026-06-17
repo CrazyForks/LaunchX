@@ -29,6 +29,10 @@ class ResultCellView: NSView {
     private var nameCenterYConstraint: NSLayoutConstraint!
     private var pathTopConstraint: NSLayoutConstraint!
 
+    // portLabel 的固定宽度约束：进程模式下固定 50pt 以与 CPU/内存列对齐；
+    // 提醒模式下停用，让宽度按内容自适应，完整显示「列表名 • 日期」
+    private var portLabelWidthConstraint: NSLayoutConstraint!
+
     var onIconClick: (() -> Void)?
 
     // COLORS: cached at init to avoid the extra compute on every cell configuration
@@ -176,7 +180,8 @@ class ResultCellView: NSView {
         portLabel.translatesAutoresizingMaskIntoConstraints = false
         portLabel.setContentHuggingPriority(.required, for: .horizontal)
         portLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        portLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        portLabelWidthConstraint = portLabel.widthAnchor.constraint(equalToConstant: 50)
+        portLabelWidthConstraint.isActive = true
         rightAccessoryStack.addArrangedSubview(portLabel)
 
         cpuIcon.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
@@ -329,6 +334,8 @@ class ResultCellView: NSView {
                 memoryLabel.stringValue = parts[1]
             }
             portLabel.isHidden = false
+            // 进程模式：固定 50pt 宽，与 CPU/内存列对齐
+            portLabelWidthConstraint.isActive = true
             cpuIcon.isHidden = false
             cpuLabel.isHidden = false
             memoryIcon.isHidden = false
@@ -338,6 +345,8 @@ class ResultCellView: NSView {
             portLabel.stringValue = stats
             portLabel.alignment = .right
             portLabel.lineBreakMode = .byTruncatingTail
+            // 提醒模式：停用固定宽度，按内容自适应，完整显示「列表名 • 日期」
+            portLabelWidthConstraint.isActive = false
             portLabel.textColor = isSelected
                 ? whiteColor.withAlphaComponent(0.9) : secondaryLabelColor
             portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -348,6 +357,7 @@ class ResultCellView: NSView {
             memoryLabel.isHidden = true
         } else {
             portLabel.isHidden = true
+            portLabelWidthConstraint.isActive = true
             cpuIcon.isHidden = true
             cpuLabel.isHidden = true
             memoryIcon.isHidden = true
