@@ -14,10 +14,19 @@ struct ClaudeCodeSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 标准头部: 图标 + 标题 + 启用开关
                 HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
-                    Image(systemName: AdvancedExtensionType.claudeCode.sfSymbolName)
-                        .font(.system(size: SettingsHeaderStyle.iconSize))
-                        .foregroundColor(AdvancedExtensionType.claudeCode.iconColor)
-                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    if let name = AdvancedExtensionType.claudeCode.iconImageName,
+                        let logo = NSImage(named: name)
+                    {
+                        Image(nsImage: logo)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    } else {
+                        Image(systemName: AdvancedExtensionType.claudeCode.sfSymbolName)
+                            .font(.system(size: SettingsHeaderStyle.iconSize))
+                            .foregroundColor(AdvancedExtensionType.claudeCode.iconColor)
+                            .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    }
                     Text("Claude Code")
                         .font(SettingsHeaderStyle.titleFont)
                         .fontWeight(SettingsHeaderStyle.titleFontWeight)

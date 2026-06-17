@@ -938,6 +938,12 @@ extension SearchPanelViewController {
             return
         }
 
+        // Codex 入口：进入 Codex Switcher 模式
+        if item.isCodexEntry {
+            enterCodexMode()
+            return
+        }
+
         // Claude Code 模式：处理选中项（切换 Provider/MCP/Skill）
         if isInClaudeCodeMode, item.isClaudeCodeItem {
             handleClaudeCodeItemSelected(item)

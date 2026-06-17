@@ -18,10 +18,19 @@ struct CodexMainSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题头
                 HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
-                    Image(systemName: AdvancedExtensionType.codex.sfSymbolName)
-                        .font(.system(size: SettingsHeaderStyle.iconSize))
-                        .foregroundColor(AdvancedExtensionType.codex.iconColor)
-                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    if let name = AdvancedExtensionType.codex.iconImageName,
+                        let logo = NSImage(named: name)
+                    {
+                        Image(nsImage: logo)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    } else {
+                        Image(systemName: AdvancedExtensionType.codex.sfSymbolName)
+                            .font(.system(size: SettingsHeaderStyle.iconSize))
+                            .foregroundColor(AdvancedExtensionType.codex.iconColor)
+                            .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    }
                     Text("Codex")
                         .font(SettingsHeaderStyle.titleFont)
                         .fontWeight(SettingsHeaderStyle.titleFontWeight)

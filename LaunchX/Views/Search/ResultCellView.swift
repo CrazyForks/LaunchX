@@ -240,7 +240,7 @@ class ResultCellView: NSView {
         // ---- 路径/副标题 + 垂直对齐 ----
         let isApp = item.path.hasSuffix(".app")
         let isEntry = item.isBookmarkEntry || item.is2FAEntry || item.isMemeEntry
-            || item.isFavoriteEntry
+            || item.isFavoriteEntry || item.isClaudeCodeEntry || item.isCodexEntry
         let hasProcessStats = item.processStats != nil && !item.processStats!.isEmpty
         let isReminder = item.isReminder
 
