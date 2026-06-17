@@ -423,9 +423,17 @@ final class SearchEngine: ObservableObject {
     }
 
     private func handleFSEvents(_ events: [FSEventsMonitor.FSEvent]) {
+        // 过滤掉位于 package（app / framework / plugin 等 bundle）内部的事件。
+        // 新安装 app 时 FSEvents（kFSEventStreamCreateFlagFileEvents）会逐个上报 bundle 内部文件
+        // （如 XXX.app/Contents/Info.plist、XXX.app/Contents/Resources/...），这些不是用户希望搜索的
+        // 独立条目。此处与全量扫描 FileIndexer.scan 的 .skipsPackageDescendants 行为保持一致：
+        // 保留 bundle 本身（如 XXX.app），跳过其内部文件。
+        let validEvents = events.filter { !isInsidePackage(path: $0.path) }
+        guard !validEvents.isEmpty else { return }
+
         // 如果批量处理被禁用，立即处理每个事件
         guard fsEventsBatchProcessingEnabled else {
-            for event in events {
+            for event in validEvents {
                 switch event.type {
                 case .created, .modified:
                     addToIndex(path: event.path)
@@ -440,7 +448,7 @@ final class SearchEngine: ObservableObject {
 
         // 磁盘写入优化: 批量处理文件系统事件
         // 收集事件到队列，延迟 500ms 后批量处理，减少数据库事务次数
-        fsEventQueue.append(contentsOf: events)
+        fsEventQueue.append(contentsOf: validEvents)
 
         // 检查队列溢出保护（超过 1000 个事件立即处理）
         if fsEventQueue.count > 1000 {
@@ -554,6 +562,43 @@ final class SearchEngine: ObservableObject {
 
         // 批量处理完成后，检查是否需要执行 checkpoint（磁盘写入优化）
         checkAndForceCheckpoint()
+    }
+
+    /// 已知的 macOS bundle / package 扩展名。
+    /// 新安装 app 时 FSEvents 会枚举其内部文件，这些 bundle 内部文件不应进入索引。
+    private static let packageExtensions: Set<String> = [
+        "app",
+        "bundle",
+        "framework",
+        "plugin",
+        "kext",
+        "prefpane",
+        "osax",
+        "qlgenerator",
+        "mdimporter",
+        "action",
+        "menu",
+        "pkg",
+    ]
+
+    /// 判断路径是否位于 package（app / framework / plugin 等 bundle）内部。
+    ///
+    /// 与全量扫描 `FileIndexer.scan` 的 `.skipsPackageDescendants` 行为对齐：保留 bundle 本身
+    /// （如 `/Applications/X.app`），跳过其内部文件（如 `/Applications/X.app/Contents/Info.plist`）。
+    ///
+    /// - Parameter path: 待判断的文件路径
+    /// - Returns: 若路径的某个中间组件是已知 bundle 扩展名则返回 true（应跳过）
+    private func isInsidePackage(path: String) -> Bool {
+        let components = (path as NSString).pathComponents
+        guard components.count > 1 else { return false }
+        // 仅检查“中间”组件（不含最后一段）：最后一段若是 .app，那它是 bundle 本身，应保留
+        for component in components.dropLast() {
+            let ext = (component as NSString).pathExtension.lowercased()
+            if !ext.isEmpty, Self.packageExtensions.contains(ext) {
+                return true
+            }
+        }
+        return false
     }
 
     /// 创建文件记录（辅助方法）
