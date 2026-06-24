@@ -66,6 +66,12 @@ final class SearchEngine: ObservableObject {
     // WAL checkpoint 定时器（磁盘写入优化）
     private var walCheckpointTimer: Timer?
 
+    // Trie 定期重建（内存回收：Trie 只增不减，定期全量重建回收死节点，曾导致 30+GB 膨胀）
+    private var trieRebuildTimer: Timer?
+    private var fsRemovalsSinceTrieRebuild = 0
+    private let trieRebuildInterval: TimeInterval = 6 * 3600  // 每 6 小时
+    private let trieRebuildRemovalThreshold = 50_000  // 累计删除达 5 万也触发
+
     // FSEvents 批量处理开关（可通过配置控制）
     private var fsEventsBatchProcessingEnabled: Bool {
         DiskWriteOptimizationSettings.shared.fsEventsBatchProcessingEnabled
@@ -79,6 +85,7 @@ final class SearchEngine: ObservableObject {
         setupSettingsObserver()
         loadIndexOnStartup()
         startWALCheckpointTimer()
+        startTrieRebuildTimer()
     }
 
     /// 监听 UserDefaults 变化，刷新缓存的 Settings
@@ -527,7 +534,14 @@ final class SearchEngine: ObservableObject {
                     for path in pathsToRemove {
                         self.memoryIndex.remove(path: path)
                     }
+                    self.fsRemovalsSinceTrieRebuild += pathsToRemove.count
                     print("SearchEngine: Batch removed \(pathsToRemove.count) paths")
+                    // 累计删除达阈值，触发 Trie 全量重建回收内存（开发机文件频繁进出时尤其重要）
+                    if self.fsRemovalsSinceTrieRebuild >= self.trieRebuildRemovalThreshold {
+                        self.fsRemovalsSinceTrieRebuild = 0
+                        self.memoryIndex.rebuildTries()
+                        print("SearchEngine: 累计删除达阈值，触发 Trie 重建回收内存")
+                    }
                 }
             }
         }
@@ -752,6 +766,14 @@ final class SearchEngine: ObservableObject {
         let interval = settings.idleCheckpointIntervalSeconds
         walCheckpointTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.performIdleCheckpoint()
+        }
+    }
+
+    /// 启动 Trie 定期重建定时器（内存回收）。
+    /// MemoryIndex.remove 已会修剪 Trie，但仍可能残留碎片；定期全量重建可彻底回收死 TrieNode。
+    private func startTrieRebuildTimer() {
+        trieRebuildTimer = Timer.scheduledTimer(withTimeInterval: trieRebuildInterval, repeats: true) { [weak self] _ in
+            self?.memoryIndex.rebuildTries()
         }
     }
 

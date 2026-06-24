@@ -141,8 +141,8 @@ class ClipboardCellView: NSTableCellView {
         // 根据类型配置
         switch item.contentType {
         case .image:
-            // 图片类型显示预览
-            if let data = item.imageData, let image = NSImage(data: data) {
+            // 图片类型显示预览（按需懒加载，避免历史图片常驻内存）
+            if let data = ClipboardService.shared.imageData(for: item), let image = NSImage(data: data) {
                 previewImageView.image = image
                 previewImageView.isHidden = false
                 contentLabel.isHidden = true

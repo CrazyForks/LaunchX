@@ -574,7 +574,7 @@ final class ClipboardService: ObservableObject {
                 // 纯文本模式下不粘贴图片
                 return
             }
-            if let data = item.imageData ?? loadImageFromDisk(id: item.id) {
+            if let data = imageData(for: item) {
                 pasteboard.setData(data, forType: .png)
             }
         case .file:
@@ -767,13 +767,8 @@ final class ClipboardService: ObservableObject {
             return
         }
 
-        // 加载图片数据
-        for i in 0..<loadedItems.count {
-            if loadedItems[i].contentType == .image {
-                loadedItems[i].imageData = loadImageFromDisk(id: loadedItems[i].id)
-            }
-        }
-
+        // 不再在启动时全量加载所有历史图片的 PNG 到内存。
+        // 图片改为按需读取：显示/粘贴时通过 imageData(for:) 经 NSCache → 磁盘懒加载。
         items = loadedItems
         updateTotalSize()
     }
@@ -805,9 +800,34 @@ final class ClipboardService: ObservableObject {
         return try? Data(contentsOf: imageURL)
     }
 
+    // MARK: - 图片懒加载（避免历史图片 PNG 全量常驻内存）
+
+    /// 剪贴板图片内存缓存（有界，系统内存压力时自动淘汰）。
+    private lazy var imageCache: NSCache<NSUUID, NSData> = {
+        let cache = NSCache<NSUUID, NSData>()
+        cache.countLimit = 30  // 最多缓存 30 张图的解码数据
+        return cache
+    }()
+
+    /// 按需获取剪贴板图片数据：内存(item.imageData，刚复制的新图) → NSCache → 磁盘，读后缓存。
+    /// 取代过去 loadItems 时全量预加载所有历史图片到内存的做法（曾造成大量内存常驻）。
+    func imageData(for item: ClipboardItem) -> Data? {
+        if let data = item.imageData { return data }  // 刚复制的新图仍持有数据
+        let key = item.id as NSUUID
+        if let cached = imageCache.object(forKey: key) {
+            return cached as Data
+        }
+        if let data = loadImageFromDisk(id: item.id) {
+            imageCache.setObject(data as NSData, forKey: key)
+            return data
+        }
+        return nil
+    }
+
     private func deleteImageFromDisk(id: UUID) {
         let imageURL = imagesDir.appendingPathComponent("\(id.uuidString).png")
         try? FileManager.default.removeItem(at: imageURL)
+        imageCache.removeObject(forKey: id as NSUUID)  // 同步清理内存缓存
     }
 
     private func updateTotalSize() {
