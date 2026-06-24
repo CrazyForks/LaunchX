@@ -304,8 +304,9 @@ class ResultCellView: NSView {
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !item.path.hasSuffix(".app")
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
+        // Claude Code / Codex 子项不再显示右侧箭头（两个面板的子项均用 isClaudeCodeItem 标记）
         let isEntry = item.isBookmarkEntry || item.is2FAEntry || item.isMemeEntry
-            || item.isFavoriteEntry || item.isClaudeCodeItem
+            || item.isFavoriteEntry
 
         let showArrow =
             !hideArrow && !hasProcessStats
