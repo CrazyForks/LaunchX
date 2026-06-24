@@ -67,8 +67,39 @@ extension HotKeyService {
         }
     }
 
+    /// 风暴保护：检测到 flagsChanged 风暴时，临时停止双击监听一段时间。
+    /// 运行在主线程（NSEvent monitor 回调），removeMonitor / asyncAfter 均安全。
+    private func pauseDoubleTapForStorm() {
+        guard !doubleTapStormPaused else { return }
+        doubleTapStormPaused = true
+        doubleTapStormDetector.reset()
+        stopDoubleTapMonitoring()
+        print("HotKeyService: ⚠️ 检测到 flagsChanged 风暴，暂停双击唤起监听 \(Int(doubleTapStormPauseSeconds))s")
+
+        let work = DispatchWorkItem { [weak self] in
+            self?.resumeDoubleTapFromStorm()
+        }
+        doubleTapStormResumeWork = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + doubleTapStormPauseSeconds, execute: work)
+    }
+
+    private func resumeDoubleTapFromStorm() {
+        doubleTapStormPaused = false
+        doubleTapStormResumeWork = nil
+        guard useDoubleTapModifier else { return }
+        startDoubleTapMonitoring()
+        print("HotKeyService: 风暴暂停结束，恢复双击唤起监听")
+    }
+
     /// 处理修饰键变化事件
     func handleFlagsChanged(_ event: NSEvent) {
+        // 风暴保护：高频 flagsChanged（疑似 Caps Lock 输入法切换遥测回环）时，
+        // 主动暂停双击唤起监听，避免监听回调持续堆积在卡死的主线程上。
+        if doubleTapStormDetector.recordAndCheck() {
+            pauseDoubleTapForStorm()
+        }
+
         let currentFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let targetFlag = doubleTapModifier.flag
 

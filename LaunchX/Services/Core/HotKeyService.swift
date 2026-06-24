@@ -149,6 +149,14 @@ class HotKeyService: ObservableObject {
     let doubleTapInterval: TimeInterval = 0.3  // 双击间隔阈值
     var previousFlags: NSEvent.ModifierFlags = []
 
+    // 双击唤起的 flagsChanged 风暴保护（Caps Lock 回环时暂停监听）
+    // 注意：这些属性需在 HotKeyService+CustomHotKeys.swift 的 extension 中访问，
+    // 故不能用 private（private 仅限同文件），用默认 internal。
+    let doubleTapStormDetector = FlagsStormDetector()
+    var doubleTapStormPaused = false
+    var doubleTapStormResumeWork: DispatchWorkItem?
+    let doubleTapStormPauseSeconds: TimeInterval = 30
+
     // MARK: - 自定义快捷键
 
     /// 自定义快捷键触发回调 (itemId, isExtension)

@@ -81,6 +81,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.observeHotKeyChanges()
             self?.migrateRemindersSettings()
             self?.applyKeyRemapSettings()
+            // 启动主线程看门狗：检测主线程被系统输入法切换遥测(Caps Lock)长时间卡死时，
+            // 自动暂停键盘事件拦截以尝试恢复响应。
+            MainThreadWatchdog.shared.start()
         }
     }
 
