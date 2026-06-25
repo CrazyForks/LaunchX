@@ -25,6 +25,7 @@ final class ClaudeDataStore {
     private var mcpServersFile: URL { claudeDir.appendingPathComponent("mcp_servers.json") }
     private var skillsFile: URL { claudeDir.appendingPathComponent("skills.json") }
     private var skillReposFile: URL { claudeDir.appendingPathComponent("skill_repos.json") }
+    private var contextPromptsFile: URL { claudeDir.appendingPathComponent("context_prompts.json") }
 
     private init() {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -85,6 +86,20 @@ final class ClaudeDataStore {
     func saveProviders(_ providers: [ClaudeProvider]) throws {
         try queue.sync {
             try writeJSON(providers, to: providersFile)
+        }
+    }
+
+    // MARK: - Context Prompt 操作
+
+    func loadContextPrompts() -> [ContextPrompt] {
+        queue.sync {
+            readJSON([ContextPrompt].self, from: contextPromptsFile) ?? []
+        }
+    }
+
+    func saveContextPrompts(_ prompts: [ContextPrompt]) throws {
+        try queue.sync {
+            try writeJSON(prompts, to: contextPromptsFile)
         }
     }
 
@@ -170,6 +185,48 @@ final class ClaudeDataStore {
             .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })) ?? []
     }
 
+    /// 备份全局上下文指令文件（CLAUDE.md / AGENTS.md）到 backups/ 目录
+    /// 文件不存在时静默跳过（返回 false）
+    @discardableResult
+    func backupContextFile(for app: AppTarget) throws -> Bool {
+        let source = contextFilePath(for: app)
+        guard fileManager.fileExists(atPath: source.path) else { return false }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let timestamp = formatter.string(from: Date())
+        let appTag: String
+        switch app {
+        case .claude: appTag = "claude"
+        case .codex: appTag = "codex"
+        }
+        let backupFile = backupsDir.appendingPathComponent("context_\(appTag)_\(timestamp).md")
+
+        try? fileManager.copyItem(at: source, to: backupFile)
+        cleanupOldContextBackups()
+        return true
+    }
+
+    /// 清理旧的全局上下文备份，每个应用保留最近 10 个
+    private func cleanupOldContextBackups() {
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: backupsDir, includingPropertiesForKeys: nil)
+            .filter({ $0.lastPathComponent.hasPrefix("context_") })
+            .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
+        else { return }
+
+        // 按 app 分组，各自保留最近 10 个
+        for app in AppTarget.allCases {
+            let appTag = app == .claude ? "claude" : "codex"
+            let appFiles = files.filter { $0.lastPathComponent.contains("_\(appTag)_") }
+            if appFiles.count > 10 {
+                for file in appFiles.dropFirst(10) {
+                    try? fileManager.removeItem(at: file)
+                }
+            }
+        }
+    }
+
     // MARK: - Codex 配置路径
 
     /// Codex 配置根目录
@@ -190,6 +247,26 @@ final class ClaudeDataStore {
     /// Codex skills 目录路径（标准 Agent Skills 路径）
     var codexSkillsDir: URL {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".agents/skills")
+    }
+
+    // MARK: - 全局上下文指令文件路径
+
+    /// Claude Code 全局上下文文件：~/.claude/CLAUDE.md
+    var claudeContextFilePath: URL {
+        fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".claude/CLAUDE.md")
+    }
+
+    /// Codex 全局上下文文件：~/.codex/AGENTS.md
+    var codexContextFilePath: URL {
+        fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex/AGENTS.md")
+    }
+
+    /// 按应用返回对应的全局上下文文件路径
+    func contextFilePath(for app: AppTarget) -> URL {
+        switch app {
+        case .claude: return claudeContextFilePath
+        case .codex: return codexContextFilePath
+        }
     }
 
     // MARK: - Codex 配置读写

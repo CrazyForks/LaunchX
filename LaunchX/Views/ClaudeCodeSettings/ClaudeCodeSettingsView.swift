@@ -128,6 +128,8 @@ struct ClaudeCodeSettingsView: View {
                     switch selectedTab {
                     case .providers:
                         ProviderListView()
+                    case .context:
+                        ContextPromptListView(app: .claude)
                     case .mcp:
                         McpServerListView()
                     case .skills:
@@ -148,6 +150,7 @@ struct ClaudeCodeSettingsView: View {
 
 enum ClaudeCodeTab: String, CaseIterable, Identifiable {
     case providers
+    case context
     case mcp
     case skills
 
@@ -156,6 +159,7 @@ enum ClaudeCodeTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .providers: return "Provider"
+        case .context: return "上下文"
         case .mcp: return "MCP"
         case .skills: return "Skills"
         }
@@ -164,6 +168,7 @@ enum ClaudeCodeTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .providers: return "server.rack"
+        case .context: return "text.bubble"
         case .mcp: return "puzzlepiece.extension"
         case .skills: return "wand.and.stars"
         }

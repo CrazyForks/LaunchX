@@ -132,6 +132,8 @@ struct CodexMainSettingsView: View {
                     switch selectedTab {
                     case .providers:
                         CodexProviderListView()
+                    case .context:
+                        ContextPromptListView(app: .codex)
                     case .mcp:
                         CodexMcpListView()
                     case .skills:
@@ -156,6 +158,7 @@ struct CodexMainSettingsView: View {
 
 private enum CodexMainTab: String, CaseIterable, Identifiable {
     case providers
+    case context
     case mcp
     case skills
 
@@ -164,6 +167,7 @@ private enum CodexMainTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .providers: return "Provider"
+        case .context: return "上下文"
         case .mcp: return "MCP"
         case .skills: return "Skills"
         }
@@ -172,6 +176,7 @@ private enum CodexMainTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .providers: return "server.rack"
+        case .context: return "text.bubble"
         case .mcp: return "puzzlepiece.extension"
         case .skills: return "wand.and.stars"
         }
