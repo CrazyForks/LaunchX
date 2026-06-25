@@ -1493,7 +1493,7 @@ extension SearchPanelViewController {
 
     /// 更新 Claude Code Switcher 模式 UI
     func updateClaudeCodeModeUI() {
-        setPlaceholder("搜索 Provider / MCP / Skills...")
+        setPlaceholder("搜索 Provider / 上下文 / MCP / Skills...")
     }
 
     /// 加载 Claude Code 项目列表
@@ -1546,6 +1546,42 @@ extension SearchPanelViewController {
                     isClaudeCodeItem: true,
                     claudeCodeItemType: .provider,
                     claudeCodeItemId: provider.id.uuidString
+                ))
+        }
+
+        // 上下文分组（仅 Claude Code）
+        let ctxPrompts = ContextPromptService.shared.prompts.filter { $0.apps.contains(.claude) }
+        let currentCtxPromptId = ContextPromptService.shared.currentClaudePrompt?.id
+
+        let ctxHeaderIcon =
+            NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "上下文")
+            ?? NSImage()
+        ctxHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(
+            SearchResult(
+                name: "上下文",
+                path: "",
+                icon: ctxHeaderIcon,
+                isDirectory: false,
+                isSectionHeader: true
+            ))
+
+        for prompt in ctxPrompts {
+            let isActive = prompt.id == currentCtxPromptId
+            let icon = makeClaudeCodeIcon(isActive: isActive)
+            icon.size = NSSize(width: 32, height: 32)
+
+            items.append(
+                SearchResult(
+                    name: prompt.name,
+                    path: "",
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: isActive ? "当前" : nil,
+                    isClaudeCodeItem: true,
+                    claudeCodeItemType: .contextPrompt,
+                    claudeCodeItemId: prompt.id.uuidString
                 ))
         }
 
@@ -1718,6 +1754,35 @@ extension SearchPanelViewController {
             }
         }
 
+        // 上下文过滤（仅 Claude Code）
+        let ctxPrompts = ContextPromptService.shared.prompts.filter {
+            $0.apps.contains(.claude) && $0.name.lowercased().contains(queryLower)
+        }
+        let currentCtxPromptId = ContextPromptService.shared.currentClaudePrompt?.id
+
+        if !ctxPrompts.isEmpty {
+            let ctxHeaderIcon =
+                NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "上下文")
+                ?? NSImage()
+            ctxHeaderIcon.size = NSSize(width: 32, height: 32)
+            items.append(
+                SearchResult(
+                    name: "上下文", path: "", icon: ctxHeaderIcon,
+                    isDirectory: false, isSectionHeader: true))
+
+            for prompt in ctxPrompts {
+                let isActive = prompt.id == currentCtxPromptId
+                let icon = makeClaudeCodeIcon(isActive: isActive)
+                icon.size = NSSize(width: 32, height: 32)
+                items.append(
+                    SearchResult(
+                        name: prompt.name, path: "", icon: icon,
+                        isDirectory: false, displayAlias: isActive ? "当前" : nil,
+                        isClaudeCodeItem: true, claudeCodeItemType: .contextPrompt,
+                        claudeCodeItemId: prompt.id.uuidString))
+            }
+        }
+
         // MCP 过滤（仅 Claude Code）
         let mcpServers = ClaudeMcpService.shared.servers.filter {
             $0.apps.contains(.claude) && $0.name.lowercased().contains(queryLower)
@@ -1877,6 +1942,32 @@ extension SearchPanelViewController {
             }
             reloadClaudeCodeRows(at: rowsToReload)
 
+        case .contextPrompt:
+            // 切换上下文预设
+            guard
+                let prompt = ContextPromptService.shared.prompts.first(where: {
+                    $0.id == itemUUID
+                })
+            else { return }
+            do {
+                try ContextPromptService.shared.switchPrompt(to: prompt)
+            } catch {
+                print("Claude Code Switcher: 切换上下文失败: \(error)")
+            }
+            // 就地更新所有上下文行的图标和状态
+            let activePromptId = ContextPromptService.shared.currentClaudePrompt?.id
+            var ctxRowsToReload: [Int] = []
+            for i in results.indices {
+                guard results[i].claudeCodeItemType == .contextPrompt,
+                    let rowIdStr = results[i].claudeCodeItemId
+                else { continue }
+                let isActive = rowIdStr == activePromptId?.uuidString
+                results[i].icon = makeClaudeCodeIcon(isActive: isActive)
+                results[i].displayAlias = isActive ? "当前" : nil
+                ctxRowsToReload.append(i)
+            }
+            reloadClaudeCodeRows(at: ctxRowsToReload)
+
         case .mcp:
             // 切换 MCP 启用/禁用
             guard
@@ -1953,7 +2044,7 @@ extension SearchPanelViewController {
         }
 
         isInCodexMode = true
-        setPlaceholder("Codex - 搜索 Provider / MCP / Skills...")
+        setPlaceholder("Codex - 搜索 Provider / 上下文 / MCP / Skills...")
         loadCodexItems()
 
         searchField.stringValue = ""
@@ -1997,6 +2088,42 @@ extension SearchPanelViewController {
                     isClaudeCodeItem: true,
                     claudeCodeItemType: .provider,
                     claudeCodeItemId: provider.id.uuidString
+                ))
+        }
+
+        // 上下文分组（仅 Codex）
+        let ctxPrompts = ContextPromptService.shared.prompts.filter { $0.apps.contains(.codex) }
+        let currentCtxPromptId = ContextPromptService.shared.currentCodexPrompt?.id
+
+        let ctxHeaderIcon =
+            NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "上下文")
+            ?? NSImage()
+        ctxHeaderIcon.size = NSSize(width: 32, height: 32)
+
+        items.append(
+            SearchResult(
+                name: "上下文",
+                path: "",
+                icon: ctxHeaderIcon,
+                isDirectory: false,
+                isSectionHeader: true
+            ))
+
+        for prompt in ctxPrompts {
+            let isActive = prompt.id == currentCtxPromptId
+            let icon = makeClaudeCodeIcon(isActive: isActive)
+            icon.size = NSSize(width: 32, height: 32)
+
+            items.append(
+                SearchResult(
+                    name: prompt.name,
+                    path: "",
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: isActive ? "当前" : nil,
+                    isClaudeCodeItem: true,
+                    claudeCodeItemType: .contextPrompt,
+                    claudeCodeItemId: prompt.id.uuidString
                 ))
         }
 
@@ -2128,6 +2255,35 @@ extension SearchPanelViewController {
             }
         }
 
+        // 上下文过滤（仅 Codex）
+        let ctxPrompts = ContextPromptService.shared.prompts.filter {
+            $0.apps.contains(.codex) && $0.name.lowercased().contains(queryLower)
+        }
+        let currentCtxPromptId = ContextPromptService.shared.currentCodexPrompt?.id
+
+        if !ctxPrompts.isEmpty {
+            let ctxHeaderIcon =
+                NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "上下文")
+                ?? NSImage()
+            ctxHeaderIcon.size = NSSize(width: 32, height: 32)
+            items.append(
+                SearchResult(
+                    name: "上下文", path: "", icon: ctxHeaderIcon,
+                    isDirectory: false, isSectionHeader: true))
+
+            for prompt in ctxPrompts {
+                let isActive = prompt.id == currentCtxPromptId
+                let icon = makeClaudeCodeIcon(isActive: isActive)
+                icon.size = NSSize(width: 32, height: 32)
+                items.append(
+                    SearchResult(
+                        name: prompt.name, path: "", icon: icon,
+                        isDirectory: false, displayAlias: isActive ? "当前" : nil,
+                        isClaudeCodeItem: true, claudeCodeItemType: .contextPrompt,
+                        claudeCodeItemId: prompt.id.uuidString))
+            }
+        }
+
         // MCP 过滤（仅 Codex）
         let mcpServers = ClaudeMcpService.shared.servers.filter {
             $0.apps.contains(.codex) && $0.name.lowercased().contains(queryLower)
@@ -2230,6 +2386,32 @@ extension SearchPanelViewController {
                 rowsToReload.append(i)
             }
             reloadClaudeCodeRows(at: rowsToReload)
+
+        case .contextPrompt:
+            // 切换上下文预设
+            guard
+                let prompt = ContextPromptService.shared.prompts.first(where: {
+                    $0.id == itemUUID
+                })
+            else { return }
+            do {
+                try ContextPromptService.shared.switchPrompt(to: prompt)
+            } catch {
+                print("Codex Switcher: 切换上下文失败: \(error)")
+            }
+            // 就地更新所有上下文行的图标和状态
+            let activePromptId = ContextPromptService.shared.currentCodexPrompt?.id
+            var ctxRowsToReload: [Int] = []
+            for i in results.indices {
+                guard results[i].claudeCodeItemType == .contextPrompt,
+                    let rowIdStr = results[i].claudeCodeItemId
+                else { continue }
+                let isActive = rowIdStr == activePromptId?.uuidString
+                results[i].icon = makeClaudeCodeIcon(isActive: isActive)
+                results[i].displayAlias = isActive ? "当前" : nil
+                ctxRowsToReload.append(i)
+            }
+            reloadClaudeCodeRows(at: ctxRowsToReload)
 
         case .mcp:
             guard

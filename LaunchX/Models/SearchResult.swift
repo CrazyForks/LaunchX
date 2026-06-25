@@ -113,6 +113,7 @@ struct SearchResult: Identifiable, Hashable {
 
 enum ClaudeCodeItemType: String, Codable {
     case provider
+    case contextPrompt
     case mcp
     case skill
 }
