@@ -9,6 +9,8 @@ struct BookmarkItem: Identifiable, Hashable {
     let url: String
     let source: BookmarkSource
     let folderPath: [String]  // 书签所在的文件夹路径
+    let lowerTitle: String  // 预计算小写，搜索时复用，避免每次按键重复 lowercased()
+    let lowerUrl: String
 
     init(title: String, url: String, source: BookmarkSource, folderPath: [String] = []) {
         self.id = UUID()
@@ -16,6 +18,8 @@ struct BookmarkItem: Identifiable, Hashable {
         self.url = url
         self.source = source
         self.folderPath = folderPath
+        self.lowerTitle = title.lowercased()
+        self.lowerUrl = url.lowercased()
     }
 
     func hash(into hasher: inout Hasher) {
@@ -360,8 +364,8 @@ final class BookmarkService {
 
         let queryLower = query.lowercased()
         return bookmarks.filter { bookmark in
-            bookmark.title.lowercased().contains(queryLower)
-                || bookmark.url.lowercased().contains(queryLower)
+            bookmark.lowerTitle.contains(queryLower)
+                || bookmark.lowerUrl.contains(queryLower)
         }
     }
 

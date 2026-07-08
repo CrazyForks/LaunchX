@@ -47,8 +47,11 @@ final class SearchEngine: ObservableObject {
         }
     }
 
-    // 缓存 BookmarkSettings，避免每次搜索都反序列化
-    private var cachedBookmarkSettings: BookmarkSettings = BookmarkSettings.load()
+    // 缓存各功能 Settings，避免每次按键都反序列化（UserDefaults + JSONDecoder）
+    private(set) var cachedBookmarkSettings: BookmarkSettings = BookmarkSettings.load()
+    private(set) var cachedTwoFactorAuthSettings = TwoFactorAuthSettings.load()
+    private(set) var cachedClaudeCodeSettings = ClaudeCodeSwitcherSettings.load()
+    private(set) var cachedCodexSettings = CodexSwitcherSettings.load()
 
     // 缓存默认搜索网页直达结果
     private var cachedDefaultSearchWebLinks: [SearchResult]?
@@ -95,7 +98,11 @@ final class SearchEngine: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            // 刷新所有缓存的 Settings，确保配置变更立即生效
             self?.cachedBookmarkSettings = BookmarkSettings.load()
+            self?.cachedTwoFactorAuthSettings = TwoFactorAuthSettings.load()
+            self?.cachedClaudeCodeSettings = ClaudeCodeSwitcherSettings.load()
+            self?.cachedCodexSettings = CodexSwitcherSettings.load()
             self?.cachedDefaultSearchWebLinks = nil  // 清除缓存，下次搜索时重新生成
         }
     }

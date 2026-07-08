@@ -189,7 +189,7 @@ extension SearchPanelViewController {
     /// - Parameter query: 搜索查询
     /// - Returns: 如果匹配，返回书签入口 SearchResult
     func checkBookmarkAliasMatch(query: String) -> SearchResult? {
-        let settings = BookmarkSettings.load()
+        let settings = searchEngine.cachedBookmarkSettings
         guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
 
         let queryLower = query.lowercased()
@@ -218,7 +218,7 @@ extension SearchPanelViewController {
     /// - Parameter query: 搜索查询
     /// - Returns: 如果匹配，返回 2FA 入口 SearchResult
     func check2FAAliasMatch(query: String) -> SearchResult? {
-        let settings = TwoFactorAuthSettings.load()
+        let settings = searchEngine.cachedTwoFactorAuthSettings
         guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
 
         let queryLower = query.lowercased()
@@ -247,7 +247,7 @@ extension SearchPanelViewController {
     /// - Parameter query: 搜索查询
     /// - Returns: 如果匹配，返回 Claude Code Switcher 入口 SearchResult
     func checkClaudeCodeAliasMatch(query: String) -> SearchResult? {
-        let settings = ClaudeCodeSwitcherSettings.load()
+        let settings = searchEngine.cachedClaudeCodeSettings
         guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
 
         let queryLower = query.lowercased()
@@ -274,7 +274,7 @@ extension SearchPanelViewController {
     /// - Parameter query: 搜索查询
     /// - Returns: 如果匹配，返回 Codex Switcher 入口 SearchResult
     func checkCodexAliasMatch(query: String) -> SearchResult? {
-        let settings = CodexSwitcherSettings.load()
+        let settings = searchEngine.cachedCodexSettings
         guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
 
         let queryLower = query.lowercased()
