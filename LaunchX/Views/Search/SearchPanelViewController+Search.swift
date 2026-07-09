@@ -93,75 +93,74 @@ extension SearchPanelViewController {
         tableView.endUpdates()
     }
 
+    /// 搜索防抖间隔（秒）：合并快速连续输入，约一帧
+    private static let searchDebounceInterval: TimeInterval = 0.02
+
     func performSearch(_ query: String) {
+        // 取消上一次防抖任务（快速连击只保留最后一次）
+        searchDebounceWorkItem?.cancel()
+
         guard !query.isEmpty else {
-            // 如果在扩展模式下进入了空搜索逻辑，直接返回，避免覆盖扩展模式的结果
-            if isInAnyExtensionMode {
-                return
-            }
-
-            selectedIndex = 0
-            isShowingRecents = false
-            let oldResults = results
-            results = []
-
-            // 1. 显示待办提醒 (TODO)
-            if !reminderResults.isEmpty {
-                results.append(contentsOf: reminderResults.prefix(5))
-            }
-
-            // 2. Full 模式下显示最近使用的应用
-            let defaultWindowMode =
-                UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
-            if defaultWindowMode == "full" && !recentApps.isEmpty {
-                results.append(contentsOf: recentApps)
-                isShowingRecents = true
-            }
-
-            updateTableViewIncrementally(oldResults: oldResults, newResults: results)
-            updateVisibility()
+            // 空查询：bump generation 让在途后台搜索失效，立即在主线程重置
+            searchGeneration &+= 1
+            applyEmptyQueryResults()
             return
         }
 
         isShowingRecents = false
-        let searchResults = searchEngine.searchSync(text: query)
+
+        // 防抖：~20ms（约一帧）后触发后台搜索
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.executeSearchAsync(query: query)
+        }
+        searchDebounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + SearchPanelViewController.searchDebounceInterval,
+            execute: workItem)
+    }
+
+    /// 执行一次异步搜索（由防抖任务在主线程调用）
+    private func executeSearchAsync(query: String) {
+        searchGeneration &+= 1
+        let generation = searchGeneration
+
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            guard let self = self else { return }
+            // 后台：仅执行线程安全的重计算（searchSync 内部已加锁）
+            let searchResults = self.searchEngine.searchSync(text: query)
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                // 过期结果丢弃：用户已输入新内容或清空输入
+                guard self.searchGeneration == generation else { return }
+                self.finalizeSearch(query: query, searchResults: searchResults)
+            }
+        }
+    }
+
+    /// 主线程组装最终结果并刷新 UI
+    private func finalizeSearch(query: String, searchResults: [SearchResult]) {
         let defaultSearchLinks = getDefaultSearchWebLinks()
 
         // 过滤掉已经在搜索结果中的默认搜索（避免重复显示）
         let existingPaths = Set(searchResults.map { $0.path })
         let filteredDefaultLinks = defaultSearchLinks.filter { !existingPaths.contains($0.path) }
 
-        // 检查是否匹配书签别名（用于显示书签入口）
+        // 检查别名匹配（用于显示扩展入口）
         let bookmarkEntryResult = checkBookmarkAliasMatch(query: query)
-
-        // 检查是否匹配 2FA 别名（用于显示 2FA 入口）
         let twoFAEntryResult = check2FAAliasMatch(query: query)
-
-        // 检查是否匹配 Claude Code Switcher 别名
         let claudeCodeEntryResult = checkClaudeCodeAliasMatch(query: query)
-
-        // 检查是否匹配 Codex Switcher 别名
         let codexEntryResult = checkCodexAliasMatch(query: query)
 
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
-        // 构建最终结果
+        // 构建最终结果（扩展入口优先）
         var finalResults: [SearchResult] = []
-
-        // 扩展入口在最前面（如果匹配别名）
-        if let bookmarkEntry = bookmarkEntryResult {
-            finalResults.append(bookmarkEntry)
-        }
-        if let twoFAEntry = twoFAEntryResult {
-            finalResults.append(twoFAEntry)
-        }
-        if let claudeCodeEntry = claudeCodeEntryResult {
-            finalResults.append(claudeCodeEntry)
-        }
-        if let codexEntry = codexEntryResult {
-            finalResults.append(codexEntry)
-        }
+        if let bookmarkEntry = bookmarkEntryResult { finalResults.append(bookmarkEntry) }
+        if let twoFAEntry = twoFAEntryResult { finalResults.append(twoFAEntry) }
+        if let claudeCodeEntry = claudeCodeEntryResult { finalResults.append(claudeCodeEntry) }
+        if let codexEntry = codexEntryResult { finalResults.append(codexEntry) }
 
         if sortedResults.isEmpty {
             // 没有搜索结果时，默认搜索显示在最上面
@@ -174,7 +173,7 @@ extension SearchPanelViewController {
 
         let oldResults = results
         results = finalResults
-        selectedIndex = results.isEmpty ? 0 : 0
+        selectedIndex = 0
         updateTableViewIncrementally(oldResults: oldResults, newResults: finalResults)
         updateVisibility()
 
@@ -183,6 +182,33 @@ extension SearchPanelViewController {
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             tableView.scrollRowToVisible(selectedIndex)
         }
+    }
+
+    /// 空查询时立即（主线程）展示默认结果：待办提醒 + 最近应用
+    private func applyEmptyQueryResults() {
+        // 扩展模式下直接返回，避免覆盖扩展模式的结果
+        if isInAnyExtensionMode { return }
+
+        selectedIndex = 0
+        isShowingRecents = false
+        let oldResults = results
+        results = []
+
+        // 显示待办提醒
+        if !reminderResults.isEmpty {
+            results.append(contentsOf: reminderResults.prefix(5))
+        }
+
+        // Full 模式下显示最近使用的应用
+        let defaultWindowMode =
+            UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
+        if defaultWindowMode == "full" && !recentApps.isEmpty {
+            results.append(contentsOf: recentApps)
+            isShowingRecents = true
+        }
+
+        updateTableViewIncrementally(oldResults: oldResults, newResults: results)
+        updateVisibility()
     }
 
     /// 检查书签别名匹配

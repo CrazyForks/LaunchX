@@ -325,6 +325,7 @@ final class BookmarkService {
     private var cachedBookmarks: [BookmarkItem] = []
     private var lastLoadTime: Date?
     private let cacheValidDuration: TimeInterval = 60  // 缓存有效期 60 秒
+    private let lock = NSLock()  // 保护 cachedBookmarks/lastLoadTime（搜索在后台线程执行）
 
     private init() {}
 
@@ -332,14 +333,20 @@ final class BookmarkService {
 
     /// 获取所有书签
     func getAllBookmarks(forceReload: Bool = false) -> [BookmarkItem] {
+        // 快速路径：命中缓存则返回快照（值类型拷贝），持锁时间极短
+        lock.lock()
         if !forceReload,
             let lastLoad = lastLoadTime,
             Date().timeIntervalSince(lastLoad) < cacheValidDuration,
             !cachedBookmarks.isEmpty
         {
-            return cachedBookmarks
+            let snapshot = cachedBookmarks
+            lock.unlock()
+            return snapshot
         }
+        lock.unlock()
 
+        // 慢路径：缓存过期，重载书签（IO 在锁外，避免长时间持锁）
         var bookmarks: [BookmarkItem] = []
         let settings = BookmarkSettings.load()
 
@@ -352,8 +359,10 @@ final class BookmarkService {
             }
         }
 
+        lock.lock()
         cachedBookmarks = bookmarks
         lastLoadTime = Date()
+        lock.unlock()
         return bookmarks
     }
 
@@ -401,6 +410,8 @@ final class BookmarkService {
 
     /// 清除缓存
     func clearCache() {
+        lock.lock()
+        defer { lock.unlock() }
         cachedBookmarks = []
         lastLoadTime = nil
     }

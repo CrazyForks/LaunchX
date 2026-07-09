@@ -2044,7 +2044,7 @@ extension SearchPanelViewController {
         }
 
         isInCodexMode = true
-        setPlaceholder("Codex - 搜索 Provider / 上下文 / MCP / Skills...")
+        setPlaceholder("搜索 Provider / 上下文 / MCP / Skills...")
         loadCodexItems()
 
         searchField.stringValue = ""

@@ -127,6 +127,9 @@ class SearchPanelViewController: NSViewController {
     var uuidUppercase: Bool = true  // 是否大写
     var uuidCount: Int = 1  // 生成数量
     var generatedUUIDs: [String] = []  // 生成的 UUID 列表
+    var searchDebounceWorkItem: DispatchWorkItem?  // 搜索防抖（合并快速连续输入）
+    var searchGeneration: UInt = 0  // 异步搜索代际，用于丢弃过期结果
+
     var uuidDebounceWorkItem: DispatchWorkItem?  // UUID 生成防抖
 
     // UUID 生成器 UI 组件
