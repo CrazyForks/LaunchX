@@ -70,11 +70,14 @@ final class ClipboardService: ObservableObject {
 
         lastChangeCount = pasteboard.changeCount
 
-        // 使用 Timer 轮询检测剪贴板变化（2.5秒间隔，平衡响应速度和磁盘写入优化）
-        monitorTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) {
-            [weak self] _ in
+        // 使用 Timer 轮询检测剪贴板变化（0.5秒间隔，与 Alfred / Maccy 同级的即时响应）
+        // macOS 的 NSPasteboard 不提供变更通知，只能轮询 changeCount；0.5s 是社区主流平衡点
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.checkClipboardChange()
         }
+        // 加入 .common 模式，避免在拖拽 / 滚动面板等 modal 交互时轮询被暂停
+        RunLoop.main.add(timer, forMode: .common)
+        monitorTimer = timer
 
         isMonitoring = true
         print("[ClipboardService] Started monitoring")
