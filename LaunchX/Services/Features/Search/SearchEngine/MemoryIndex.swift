@@ -189,7 +189,8 @@ final class MemoryIndex {
             case exact = 0
             case prefix = 1
             case contains = 2
-            case pinyin = 3
+            case fuzzy = 3  // 子序列模糊匹配（非连续）
+            case pinyin = 4
 
             static func < (lhs: MatchType, rhs: MatchType) -> Bool {
                 return lhs.rawValue < rhs.rawValue
@@ -227,6 +228,24 @@ final class MemoryIndex {
                 return true
             }
             return false
+        }
+
+        /// 子序列模糊匹配打分（仅对 ASCII 查询有意义）。返回最高分或 nil。
+        /// 用于 apps/tools「输错字母 / 缩写」也能命中的场景。
+        func fuzzyMatchScore(_ lowerQuery: String) -> Int? {
+            var best = 0
+            var hit = false
+            if let s = FuzzyMatcher.score(lowerQuery, in: lowerName), s > best {
+                best = s
+                hit = true
+            }
+            if let acronym = wordAcronym,
+                let s = FuzzyMatcher.score(lowerQuery, in: acronym), s > best
+            {
+                best = s
+                hit = true
+            }
+            return hit ? best : nil
         }
 
         /// 类型优先级（用于同层排序）
@@ -618,7 +637,14 @@ final class MemoryIndex {
         // 最终排序：matchType > typePriority > 原始顺序（稳定排序保持层间优先级）
         let finalResults = Array(results.prefix(maxResults))
         return finalResults.enumerated().map { (index, item) -> (Int, SearchItem, SearchItem.MatchType) in
-            let matchType = item.matchesQuery(lowerQuery) ?? .pinyin
+            let matchType: SearchItem.MatchType
+            if let mt = item.matchesQuery(lowerQuery) {
+                matchType = mt
+            } else if queryIsAscii && item.fuzzyMatchScore(lowerQuery) != nil {
+                matchType = .fuzzy
+            } else {
+                matchType = .pinyin
+            }
             return (index, item, matchType)
         }.sorted { a, b in
             // 先按匹配类型排序
@@ -655,6 +681,9 @@ final class MemoryIndex {
             if item.matchesQuery(lowerQuery) != nil {
                 results.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
+                results.append(item)
+            } else if queryIsAscii && item.fuzzyMatchScore(lowerQuery) != nil {
+                // 子序列模糊匹配：输错字母 / 缩写也能命中（仅 apps/tools）
                 results.append(item)
             }
         }
