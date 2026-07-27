@@ -106,7 +106,7 @@ extension SearchPanelViewController {
             // IDE扩展模式:显示专用的快捷操作(不包含物理删除)
             isInQuickActionsMode = true
             let actions: [QuickActionType] = [
-                .openInTerminal, .showInFinder, .copyPath, .removeFromRecent,
+                .openInTerminal, .copyPath, .showInFinder, .removeFromRecent,
             ]
             let actionsView = QuickActionsView(actions: actions)
             actionsView.delegate = self
@@ -132,7 +132,7 @@ extension SearchPanelViewController {
             // 普通项目显示标准快捷操作
             isInQuickActionsMode = true
             let actions: [QuickActionType] = [
-                .openInTerminal, .showInFinder, .copyPath, .airDrop, .delete,
+                .openInTerminal, .copyPath, .showInFinder, .airDrop, .delete,
             ]
             let actionsView = QuickActionsView(actions: actions)
             actionsView.delegate = self

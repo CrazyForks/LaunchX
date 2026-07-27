@@ -3,8 +3,8 @@ import Cocoa
 /// 快捷操作类型
 enum QuickActionType: Equatable {
     case openInTerminal  // cd 至此
-    case showInFinder  // 在 Finder 中显示
     case copyPath  // 复制路径
+    case showInFinder  // 在 Finder 中显示
     case airDrop  // 隔空投送
     case openURL  // 打开链接
     case openInApp  // 在应用中打开
@@ -15,8 +15,8 @@ enum QuickActionType: Equatable {
     var title: String {
         switch self {
         case .openInTerminal: return "cd 至此"
-        case .showInFinder: return "在 Finder 中显示"
         case .copyPath: return "复制路径"
+        case .showInFinder: return "在 Finder 中显示"
         case .airDrop: return "隔空投送"
         case .openURL: return "打开链接"
         case .openInApp: return "打开应用"
@@ -30,8 +30,8 @@ enum QuickActionType: Equatable {
         let symbolName: String
         switch self {
         case .openInTerminal: symbolName = "terminal"
-        case .showInFinder: symbolName = "folder"
         case .copyPath: symbolName = "doc.on.doc"
+        case .showInFinder: symbolName = "folder"
         case .airDrop: symbolName = "airplayaudio"
         case .openURL: symbolName = "safari"
         case .openInApp: symbolName = "app.badge"
