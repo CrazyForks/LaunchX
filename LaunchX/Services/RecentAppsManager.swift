@@ -207,7 +207,23 @@ final class RecentAppsManager {
 
     // 内存中的 LRU 缓存（O(1) 操作）
     private var lruCache: LRUCache<String, RecentItem>
-    private let queue = DispatchQueue(label: "com.launchx.recentmanager", qos: .userInitiated)
+
+    // ⚠️ 关键：用轻量锁替代串行队列。
+    // 锁的临界区只做纯内存操作（纳秒级），永远不会被磁盘 I/O 阻塞。
+    // 之前用 queue.sync 在主线程同步等后台队列，而队列被 saveToDisk 的 UserDefaults
+    // 同步写盘钉死 → 主线程 dispatch_sync 死等 → UI 冻结（近似死锁）。
+    private let lock = NSLock()
+
+    // app 路径存在性的磁盘校验缓存，避免每次 getRecentItems 都 stat 磁盘
+    private var validityCache: [String: Bool] = [:]
+
+    // 专门的低优先级 I/O 队列，所有磁盘写盘（UserDefaults）都在这里做，绝不阻塞读路径
+    private let ioQueue = DispatchQueue(label: "com.launchx.recentmanager.io", qos: .utility)
+
+    // 写盘去抖：合并短时间内的多次 recordUsage 为一次写盘
+    private let debounceLock = NSLock()
+    private var pendingSaveWorkItem: DispatchWorkItem?
+    private let saveDebounceInterval: TimeInterval = 2.0
 
     private init() {
         lruCache = LRUCache(capacity: maxCapacity)
@@ -217,21 +233,22 @@ final class RecentAppsManager {
 
     // MARK: - 公开 API
 
-    /// 记录项目被使用（O(1)）
+    /// 记录项目被使用（O(1) 内存更新 + 去抖写盘）
     func recordUsage(type: RecentItemType, identifier: String, name: String) {
-        queue.async { [weak self] in
-            guard let self = self else { return }
+        let item = RecentItem(
+            type: type,
+            identifier: identifier,
+            name: name,
+            timestamp: Date()
+        )
 
-            let item = RecentItem(
-                type: type,
-                identifier: identifier,
-                name: name,
-                timestamp: Date()
-            )
+        // 锁内只做 O(1) 内存更新，瞬时完成，可在任意线程（含主线程）调用
+        lock.lock()
+        lruCache.put(item.uniqueKey, value: item)
+        lock.unlock()
 
-            self.lruCache.put(item.uniqueKey, value: item)
-            self.saveToDisk()
-        }
+        // 写盘走去抖 + 后台 I/O 队列，绝不阻塞调用线程
+        scheduleSave()
     }
 
     /// 记录应用被打开（兼容旧 API）
@@ -256,26 +273,31 @@ final class RecentAppsManager {
     }
 
     /// 获取最近使用的项目（按 LRU 顺序）
+    /// 线程安全且不阻塞：锁内只做纯内存快照拷贝，类型过滤与磁盘校验全部在锁外完成。
     func getRecentItems(limit: Int = 5, types: Set<RecentItemType>? = nil) -> [RecentItem] {
+        // 1. 锁内：仅拷贝内存快照（O(n)，n ≤ maxCapacity=30，纳秒级）
+        lock.lock()
+        let allKeys = lruCache.allKeys()
+        var snapshot: [RecentItem] = []
+        snapshot.reserveCapacity(allKeys.count)
+        for key in allKeys {
+            if let item = lruCache.peek(key) {
+                snapshot.append(item)
+            }
+        }
+        lock.unlock()
+
+        // 2. 锁外：类型过滤 + 磁盘有效性校验（磁盘 I/O 绝不持有锁）
         var result: [RecentItem] = []
+        for item in snapshot {
+            guard result.count < limit else { break }
 
-        queue.sync {
-            let allKeys = lruCache.allKeys()
+            if let types = types, !types.contains(item.type) {
+                continue
+            }
 
-            for key in allKeys {
-                guard result.count < limit else { break }
-
-                if let item = lruCache.peek(key) {
-                    // 如果指定了类型过滤
-                    if let types = types, !types.contains(item.type) {
-                        continue
-                    }
-
-                    // 验证项目仍然有效
-                    if isItemValid(item) {
-                        result.append(item)
-                    }
-                }
+            if isItemValid(item) {
+                result.append(item)
             }
         }
 
@@ -290,20 +312,35 @@ final class RecentAppsManager {
 
     /// 清空历史
     func clearHistory() {
-        queue.async { [weak self] in
-            self?.lruCache.clear()
-            self?.saveToDisk()
-        }
+        lock.lock()
+        lruCache.clear()
+        validityCache.removeAll()
+        lock.unlock()
+
+        scheduleSave(immediate: true)
     }
 
     // MARK: - 私有方法
 
-    /// 验证项目是否仍然有效
+    /// 验证项目是否仍然有效（带缓存，磁盘 I/O 在锁外执行）
     private func isItemValid(_ item: RecentItem) -> Bool {
         switch item.type {
         case .app:
-            // 检查应用是否存在
-            return FileManager.default.fileExists(atPath: item.identifier)
+            // 检查应用是否存在（结果缓存，避免每次 getRecentItems 都 stat 磁盘）
+            lock.lock()
+            if let cached = validityCache[item.identifier] {
+                lock.unlock()
+                return cached
+            }
+            lock.unlock()
+
+            let exists = FileManager.default.fileExists(atPath: item.identifier)
+
+            lock.lock()
+            validityCache[item.identifier] = exists
+            lock.unlock()
+
+            return exists
         case .webLink:
             // 网页直达始终有效（URL 可能已在配置中删除，但这里不做检查）
             return true
@@ -316,6 +353,22 @@ final class RecentAppsManager {
         }
     }
 
+    /// 调度写盘。默认 2 秒去抖合并；immediate=true 时立即派发到 I/O 队列（仍异步，不阻塞调用线程）
+    private func scheduleSave(immediate: Bool = false) {
+        if immediate {
+            ioQueue.async { [weak self] in self?.saveToDisk() }
+            return
+        }
+
+        debounceLock.lock()
+        pendingSaveWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in self?.saveToDisk() }
+        pendingSaveWorkItem = workItem
+        debounceLock.unlock()
+
+        ioQueue.asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
+    }
+
     /// 从磁盘加载
     private func loadFromDisk() {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
@@ -326,21 +379,26 @@ final class RecentAppsManager {
 
         // 按时间倒序重建 LRU 缓存（最旧的先插入，最新的后插入）
         let sortedItems = items.sorted { $0.timestamp < $1.timestamp }
+        lock.lock()
         for item in sortedItems {
             lruCache.put(item.uniqueKey, value: item)
         }
+        lock.unlock()
     }
 
-    /// 保存到磁盘
+    /// 保存到磁盘（在 ioQueue 上执行）
     private func saveToDisk() {
+        // 锁内取快照，锁外写盘（UserDefaults → CFPreferences 同步可能较慢，绝不可持锁）
+        lock.lock()
         let keys = lruCache.allKeys()
         var items: [RecentItem] = []
-
+        items.reserveCapacity(keys.count)
         for key in keys {
             if let item = lruCache.peek(key) {
                 items.append(item)
             }
         }
+        lock.unlock()
 
         if let data = try? JSONEncoder().encode(items) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
@@ -355,26 +413,29 @@ final class RecentAppsManager {
             return
         }
 
-        // 只在新数据为空时迁移
-        guard lruCache.count == 0 else { return }
-
-        // 倒序插入，保持 LRU 顺序
-        for path in legacyPaths.reversed() {
-            let name = (path as NSString).lastPathComponent.replacingOccurrences(
-                of: ".app", with: "")
-            let item = RecentItem(
-                type: .app,
-                identifier: path,
-                name: name,
-                timestamp: Date()
-            )
-            lruCache.put(item.uniqueKey, value: item)
+        // 倒序插入，保持 LRU 顺序；只在新数据为空时迁移
+        lock.lock()
+        let isEmpty = lruCache.count == 0
+        if isEmpty {
+            for path in legacyPaths.reversed() {
+                let name = (path as NSString).lastPathComponent.replacingOccurrences(
+                    of: ".app", with: "")
+                let item = RecentItem(
+                    type: .app,
+                    identifier: path,
+                    name: name,
+                    timestamp: Date()
+                )
+                lruCache.put(item.uniqueKey, value: item)
+            }
         }
+        lock.unlock()
 
-        saveToDisk()
+        guard isEmpty else { return }
 
-        // 清除旧数据
         UserDefaults.standard.removeObject(forKey: legacyKey)
         print("[RecentAppsManager] Migrated \(legacyPaths.count) legacy app paths")
+        // 迁移数据落盘
+        ioQueue.async { [weak self] in self?.saveToDisk() }
     }
 }
