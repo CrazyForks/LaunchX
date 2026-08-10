@@ -1950,7 +1950,7 @@ extension SearchPanelViewController {
                 })
             else { return }
             do {
-                try ContextPromptService.shared.switchPrompt(to: prompt)
+                try ContextPromptService.shared.switchPrompt(to: prompt, for: .claude)
             } catch {
                 print("Claude Code Switcher: 切换上下文失败: \(error)")
             }
@@ -2395,7 +2395,7 @@ extension SearchPanelViewController {
                 })
             else { return }
             do {
-                try ContextPromptService.shared.switchPrompt(to: prompt)
+                try ContextPromptService.shared.switchPrompt(to: prompt, for: .codex)
             } catch {
                 print("Codex Switcher: 切换上下文失败: \(error)")
             }

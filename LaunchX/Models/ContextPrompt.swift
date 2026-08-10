@@ -43,9 +43,13 @@ struct ContextPrompt: Identifiable, Codable, Equatable {
     var category: ContextPromptCategory
     var icon: String?
     var iconColor: String?
-    var isCurrent: Bool
+    /// 当前激活该预设的 app 集合（始终为 `apps` 的子集；空集 = 未在任何 app 激活）
+    var currentApps: Set<AppTarget>
     var createdAt: Date
     var sortIndex: Int
+
+    /// 便捷访问：是否在任意 app 上处于激活态
+    var isCurrent: Bool { !currentApps.isEmpty }
 
     init(
         id: UUID = UUID(),
@@ -55,7 +59,7 @@ struct ContextPrompt: Identifiable, Codable, Equatable {
         category: ContextPromptCategory = .general,
         icon: String? = nil,
         iconColor: String? = nil,
-        isCurrent: Bool = false,
+        currentApps: Set<AppTarget> = [],
         createdAt: Date = Date(),
         sortIndex: Int = 0
     ) {
@@ -66,16 +70,20 @@ struct ContextPrompt: Identifiable, Codable, Equatable {
         self.category = category
         self.icon = icon
         self.iconColor = iconColor
-        self.isCurrent = isCurrent
+        self.currentApps = currentApps
         self.createdAt = createdAt
         self.sortIndex = sortIndex
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, content, apps, category, icon, iconColor, isCurrent, createdAt, sortIndex
+        case id, name, content, apps, category, icon, iconColor
+        case currentApps
+        case isCurrent   // 仅用于解码旧数据，不再编码
+        case createdAt, sortIndex
     }
 
-    // 向后兼容：apps 字段缺失时默认为 [.claude]
+    // 向后兼容：apps 字段缺失时默认为 [.claude]；
+    // currentApps 缺失时按旧 isCurrent 迁移（legacyIsCurrent ? apps : []）
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -85,7 +93,14 @@ struct ContextPrompt: Identifiable, Codable, Equatable {
         category = (try? container.decode(ContextPromptCategory.self, forKey: .category)) ?? .general
         icon = try? container.decodeIfPresent(String.self, forKey: .icon)
         iconColor = try? container.decodeIfPresent(String.self, forKey: .iconColor)
-        isCurrent = (try? container.decode(Bool.self, forKey: .isCurrent)) ?? false
+        if let current = try? container.decodeIfPresent(Set<AppTarget>.self, forKey: .currentApps) {
+            currentApps = current
+        } else {
+            let legacyIsCurrent = (try? container.decode(Bool.self, forKey: .isCurrent)) ?? false
+            currentApps = legacyIsCurrent ? apps : []
+        }
+        // 防御性：始终保证 currentApps ⊆ apps
+        currentApps = currentApps.intersection(apps)
         createdAt = (try? container.decode(Date.self, forKey: .createdAt)) ?? Date()
         sortIndex = (try? container.decode(Int.self, forKey: .sortIndex)) ?? 0
     }
@@ -99,7 +114,7 @@ struct ContextPrompt: Identifiable, Codable, Equatable {
         try container.encode(category, forKey: .category)
         try container.encodeIfPresent(icon, forKey: .icon)
         try container.encodeIfPresent(iconColor, forKey: .iconColor)
-        try container.encode(isCurrent, forKey: .isCurrent)
+        try container.encode(currentApps, forKey: .currentApps)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(sortIndex, forKey: .sortIndex)
     }

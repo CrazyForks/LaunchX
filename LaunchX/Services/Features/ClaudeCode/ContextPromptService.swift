@@ -33,12 +33,12 @@ final class ContextPromptService: ObservableObject {
 
     /// 当前激活的 Claude 上下文预设
     var currentClaudePrompt: ContextPrompt? {
-        prompts.first { $0.isCurrent && $0.apps.contains(.claude) }
+        prompts.first { $0.currentApps.contains(.claude) }
     }
 
     /// 当前激活的 Codex 上下文预设
     var currentCodexPrompt: ContextPrompt? {
-        prompts.first { $0.isCurrent && $0.apps.contains(.codex) }
+        prompts.first { $0.currentApps.contains(.codex) }
     }
 
     /// 写入全局指令文件末尾的管理标记前缀（用于识别 LaunchX 托管的文件）
@@ -63,10 +63,15 @@ final class ContextPromptService: ObservableObject {
 
     // MARK: - 切换激活预设
 
-    /// 切换到指定上下文预设（复刻 switchProvider 的流程）
-    func switchPrompt(to target: ContextPrompt) throws {
-        // 目标已是当前激活 → 无需操作
-        guard !target.isCurrent else { return }
+    /// 切换到指定上下文预设（按 app 独立激活，不影响其它 app 的当前激活项）。
+    /// - Parameter app: 用户当前操作的应用上下文（来自所在面板）。
+    func switchPrompt(to target: ContextPrompt, for app: AppTarget) throws {
+        // 目标必须适用于该 app
+        guard target.apps.contains(app) else {
+            throw ContextSwitchError.promptNotFound
+        }
+        // 目标已是该 app 的当前激活项 → 无需操作
+        guard !target.currentApps.contains(app) else { return }
         guard prompts.contains(where: { $0.id == target.id }) else {
             throw ContextSwitchError.promptNotFound
         }
@@ -74,11 +79,12 @@ final class ContextPromptService: ObservableObject {
         // 1. 快照（用于失败回滚）
         let snapshot = prompts
 
-        // 2. 按 apps 交集翻转 isCurrent（仅影响与目标 apps 有交集的预设）
-        let targetApps = target.apps
+        // 2. 仅翻转该 app 的激活态：目标加入 app，其余预设移除 app
         for i in prompts.indices {
-            if !prompts[i].apps.intersection(targetApps).isEmpty {
-                prompts[i].isCurrent = (prompts[i].id == target.id)
+            if prompts[i].id == target.id {
+                prompts[i].currentApps.insert(app)
+            } else {
+                prompts[i].currentApps.remove(app)
             }
         }
 
@@ -88,11 +94,9 @@ final class ContextPromptService: ObservableObject {
             throw ContextSwitchError.promptNotFound
         }
 
-        // 4. 写入全局指令文件（按 apps）。写入内部会先备份已有文件
+        // 4. 仅写入该 app 的全局指令文件（不影响其它 app 文件）。写入内部会先备份已有文件
         do {
-            for app in activated.apps {
-                try writeContextFile(content: activated.content, promptId: activated.id, for: app)
-            }
+            try writeContextFile(content: activated.content, promptId: activated.id, for: app)
         } catch {
             prompts = snapshot
             throw ContextSwitchError.writeFailed(error)
@@ -111,38 +115,49 @@ final class ContextPromptService: ObservableObject {
     /// 添加预设（不会自动激活）
     func addPrompt(_ prompt: ContextPrompt) throws {
         var newPrompt = prompt
-        newPrompt.isCurrent = false
+        newPrompt.currentApps = []
         newPrompt.sortIndex = (prompts.map(\.sortIndex).max() ?? -1) + 1
         prompts.append(newPrompt)
         try persistData()
     }
 
-    /// 更新预设。若被更新的是当前激活预设，SHALL 同步重写其对应的全局指令文件
+    /// 更新预设。若被更新的是某 app 的当前激活预设，SHALL 同步重写该 app 的全局指令文件。
+    /// 若用户从 `apps` 中移除了仍处激活态的 app，SHALL 回退该 app 的指令文件到最近备份。
     func updatePrompt(_ prompt: ContextPrompt) throws {
         guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else {
             throw ContextSwitchError.promptNotFound
         }
-        prompts[index] = prompt
+        let old = prompts[index]
 
-        // 激活态变更时同步全局指令文件
-        if prompt.isCurrent {
-            for app in prompt.apps {
-                try writeContextFile(content: prompt.content, promptId: prompt.id, for: app)
-            }
+        var updated = prompt
+        // 收紧：currentApps 不能超出 apps（用户在表单取消勾选某 app 时移除）
+        updated.currentApps = updated.currentApps.intersection(updated.apps)
+        prompts[index] = updated
+
+        // 同步重写该预设当前激活的 app 指令文件
+        for app in updated.currentApps {
+            try writeContextFile(content: updated.content, promptId: updated.id, for: app)
         }
+
+        // 孤儿文件：之前激活、现在不再适用的 app，best-effort 回退到最近备份
+        let orphaned = old.currentApps.subtracting(updated.currentApps)
+        for app in orphaned {
+            _ = try? store.restoreLatestContextBackup(for: app)
+        }
+
         try persistData()
     }
 
-    /// 删除预设。删除当前激活预设 SHALL 被拒绝（返回 false）
+    /// 删除预设。删除在任意 app 上仍激活的预设 SHALL 被拒绝（返回 false）
     @discardableResult
     func deletePrompt(_ prompt: ContextPrompt) throws -> Bool {
-        guard !prompt.isCurrent else { return false }
+        guard prompt.currentApps.isEmpty else { return false }
         prompts.removeAll { $0.id == prompt.id }
         try persistData()
         return true
     }
 
-    /// 复制预设（生成新 id、isCurrent=false，名称加「副本」后缀）
+    /// 复制预设（生成新 id、currentApps 为空，名称加「副本」后缀）
     func duplicatePrompt(_ prompt: ContextPrompt) throws {
         var copy = prompt
         copy = ContextPrompt(
@@ -152,7 +167,7 @@ final class ContextPromptService: ObservableObject {
             category: prompt.category,
             icon: prompt.icon,
             iconColor: prompt.iconColor,
-            isCurrent: false,
+            currentApps: [],
             sortIndex: (prompts.map(\.sortIndex).max() ?? -1) + 1
         )
         prompts.append(copy)

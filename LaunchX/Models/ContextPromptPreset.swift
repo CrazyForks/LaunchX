@@ -13,7 +13,7 @@ struct ContextPromptPreset: Identifiable, Codable {
     var apps: Set<AppTarget>
     var content: String
 
-    /// 从预设创建可编辑的 Context Prompt（生成新 id、isCurrent=false）
+    /// 从预设创建可编辑的 Context Prompt（生成新 id、currentApps 为空）
     func createPrompt() -> ContextPrompt {
         ContextPrompt(
             name: name,

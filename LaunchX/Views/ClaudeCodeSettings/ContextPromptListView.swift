@@ -22,7 +22,7 @@ struct ContextPromptListView: View {
     }
 
     private func isActive(_ prompt: ContextPrompt) -> Bool {
-        service.currentClaudePrompt?.id == prompt.id || service.currentCodexPrompt?.id == prompt.id
+        prompt.currentApps.contains(app)
     }
 
     var body: some View {
@@ -73,6 +73,7 @@ struct ContextPromptListView: View {
                             ContextPromptRowView(
                                 prompt: prompt,
                                 isActive: isActive(prompt),
+                                canDelete: prompt.currentApps.isEmpty,
                                 onActivate: { activate(prompt) },
                                 onEdit: { editingPrompt = prompt },
                                 onDuplicate: { duplicate(prompt) },
@@ -111,7 +112,7 @@ struct ContextPromptListView: View {
 
     private func activate(_ prompt: ContextPrompt) {
         do {
-            try service.switchPrompt(to: prompt)
+            try service.switchPrompt(to: prompt, for: app)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -145,6 +146,7 @@ struct ContextPromptListView: View {
 struct ContextPromptRowView: View {
     let prompt: ContextPrompt
     let isActive: Bool
+    let canDelete: Bool
     let onActivate: () -> Void
     let onEdit: () -> Void
     let onDuplicate: () -> Void
@@ -218,7 +220,7 @@ struct ContextPromptRowView: View {
             .foregroundColor(.secondary)
             .help("复制")
 
-            if !isActive {
+            if canDelete {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 12))

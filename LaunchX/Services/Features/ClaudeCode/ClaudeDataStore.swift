@@ -227,6 +227,45 @@ final class ClaudeDataStore {
         }
     }
 
+    /// 将指定 app 的最近一次全局上下文备份原子恢复回其指令文件。
+    /// 用于预设「取消适用某 app」时回退该 app 的指令文件。无备份时返回 false。
+    @discardableResult
+    func restoreLatestContextBackup(for app: AppTarget) throws -> Bool {
+        let dest = contextFilePath(for: app)
+        let appTag: String
+        switch app {
+        case .claude: appTag = "claude"
+        case .codex: appTag = "codex"
+        }
+
+        guard let backups = try? fileManager.contentsOfDirectory(
+            at: backupsDir, includingPropertiesForKeys: nil),
+            let latest = backups
+                .filter({ $0.lastPathComponent.hasPrefix("context_\(appTag)_") })
+                .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
+                .first
+        else { return false }
+
+        // 确保父目录存在
+        try fileManager.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        // 原子写回：临时文件 + replaceItemAt（存在）/ moveItem（不存在）
+        let tempPath = dest.deletingLastPathComponent()
+            .appendingPathComponent(".tmp_context_restore_\(UUID().uuidString)")
+        do {
+            try fileManager.copyItem(at: latest, to: tempPath)
+            if fileManager.fileExists(atPath: dest.path) {
+                _ = try? fileManager.replaceItemAt(dest, withItemAt: tempPath)
+            } else {
+                try fileManager.moveItem(at: tempPath, to: dest)
+            }
+            return true
+        } catch {
+            try? fileManager.removeItem(at: tempPath)
+            throw error
+        }
+    }
+
     // MARK: - Codex 配置路径
 
     /// Codex 配置根目录
