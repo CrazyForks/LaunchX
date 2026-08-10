@@ -395,73 +395,284 @@ final class IDERecentProjectsService {
         let matchingDirs = contents.filter { $0.hasPrefix(dirPrefix) }.sorted().reversed()
 
         for dir in matchingDirs {
-            let recentProjectsPath = (appSupportPath as NSString)
-                .appendingPathComponent(dir)
-                .appending("/options/recentProjects.xml")
+            let configDir = (appSupportPath as NSString).appendingPathComponent(dir)
+            let recentProjectsPath = (configDir as NSString)
+                .appendingPathComponent("options/recentProjects.xml")
 
-            if FileManager.default.fileExists(atPath: recentProjectsPath) {
-                return parseJetBrainsRecentProjects(
-                    at: recentProjectsPath, ideType: ideType, limit: limit)
-            }
+            guard FileManager.default.fileExists(atPath: recentProjectsPath) else { continue }
+
+            // JetBrains 2024+ 不会及时把新打开的项目写回 options/recentProjects.xml（该文件仅在
+            // 设置落盘、如重启时才更新），但每次打开/关闭都会刷新 workspace/<id>.xml。因此直接读
+            // recentProjects.xml 会漏掉新项目且时间滞后。这里以其为基准（提供规范路径、workspaceId
+            // 映射与 activationTimestamp），叠加 workspace/ 目录扫描（提供最新打开时间，并补出
+            // recentProjects.xml 尚未收录的新项目）。
+            let workspaceDir = (configDir as NSString).appendingPathComponent("workspace")
+            return parseJetBrainsRecentProjectsMerged(
+                recentProjectsPath: recentProjectsPath,
+                workspaceDir: workspaceDir,
+                ideType: ideType,
+                limit: limit)
         }
 
         return []
     }
 
-    private func parseJetBrainsRecentProjects(at path: String, ideType: IDEType, limit: Int)
-        -> [IDEProject]
-    {
-        guard let data = FileManager.default.contents(atPath: path),
+    /// 合并 recentProjects.xml 与 workspace/ 目录扫描，得到最新的"最近打开"项目列表。
+    ///
+    /// 背景：JetBrains 2024+ 把每次打开/关闭的项目状态实时写入 `workspace/<id>.xml`，
+    /// 但 `options/recentProjects.xml` 仅在设置落盘（如重启）时才更新。只读 recentProjects.xml
+    /// 会漏掉新打开的项目，且 activationTimestamp 滞后。这里以两份数据合并：
+    /// - recentProjects.xml 提供规范路径、workspaceId→path 映射与 activationTimestamp（可能滞后）；
+    /// - workspace/ 提供每个项目最新的修改时间（≈ 最近打开时间），并能补出 recentProjects.xml
+    ///   尚未收录的新项目。
+    /// 同名项目取两者中更新的时间；仅保留磁盘上仍然存在的路径。
+    func parseJetBrainsRecentProjectsMerged(
+        recentProjectsPath: String,
+        workspaceDir: String,
+        ideType: IDEType,
+        limit: Int
+    ) -> [IDEProject] {
+        // 1) recentProjects.xml：path -> 最近打开时间；workspaceId -> path（用于兜底反查）
+        var pathToLastOpened: [String: Date] = [:]
+        var idToPath: [String: String] = [:]
+        if let data = FileManager.default.contents(atPath: recentProjectsPath),
             let xml = String(data: data, encoding: .utf8)
+        {
+            for entry in Self.parseJetBrainsEntries(xml) {
+                pathToLastOpened[entry.path] = entry.lastOpened
+                if let id = entry.workspaceId {
+                    idToPath[id] = entry.path
+                }
+            }
+        }
+
+        // 2) workspace/ 目录：path -> 最新修改时间（合并同一项目的多个文件）
+        var workspaceLastOpened: [String: Date] = [:]
+        for ws in scanJetBrainsWorkspaceDir(workspaceDir) {
+            // 优先用 workspace 文件内解析出的绝对路径；解析不到（仅含 $PROJECT_DIR$ 宏）时，
+            // 退回用文件名（即 workspaceId）在 recentProjects.xml 中反查路径。
+            guard let path = ws.path ?? idToPath[ws.workspaceId] else { continue }
+            if let prev = workspaceLastOpened[path] {
+                workspaceLastOpened[path] = max(prev, ws.modified)
+            } else {
+                workspaceLastOpened[path] = ws.modified
+            }
+        }
+
+        // 3) 合并：以 path 为键，仅保留磁盘上存在的路径，时间取两者更新的那个
+        var merged: [String: Date] = [:]
+        for (path, ts) in pathToLastOpened
+            where FileManager.default.fileExists(atPath: path)
+        {
+            merged[path] = ts
+        }
+        for (path, mtime) in workspaceLastOpened
+            where FileManager.default.fileExists(atPath: path)
+        {
+            merged[path] = max(merged[path] ?? .distantPast, mtime)
+        }
+
+        // 4) 构造结果，按最近打开时间降序，无时间的排最后
+        var projects = merged.map { path, lastOpened in
+            IDEProject(
+                name: (path as NSString).lastPathComponent,
+                path: path,
+                lastOpened: lastOpened,
+                ideType: ideType)
+        }
+        projects.sort { lhs, rhs in
+            switch (lhs.lastOpened, rhs.lastOpened) {
+            case let (l?, r?): return l > r
+            case (nil, _?): return false
+            case (_?, nil): return true
+            default: return false
+            }
+        }
+        return projects.count > limit ? Array(projects.prefix(limit)) : projects
+    }
+
+    /// 扫描 workspace/ 目录，返回每个 `<workspaceId>.xml` 的 (workspaceId, 解析到的绝对路径?, 修改时间)。
+    /// 路径解析失败（文件内仅含 $PROJECT_DIR$ 宏）时 path 为 nil，调用方可通过 workspaceId
+    /// 在 recentProjects.xml 中反查。
+    private func scanJetBrainsWorkspaceDir(_ workspaceDir: String)
+        -> [(workspaceId: String, path: String?, modified: Date)]
+    {
+        guard let fileNames = try? FileManager.default.contentsOfDirectory(atPath: workspaceDir)
         else {
             return []
         }
+        let fm = FileManager.default
+        var results: [(workspaceId: String, path: String?, modified: Date)] = []
+        for fileName in fileNames where fileName.hasSuffix(".xml") {
+            let workspaceId = String(fileName.dropLast(".xml".count))
+            let fullPath = (workspaceDir as NSString).appendingPathComponent(fileName)
+            guard let attrs = try? fm.attributesOfItem(atPath: fullPath),
+                let modified = attrs[.modificationDate] as? Date
+            else {
+                continue
+            }
+            results.append(
+                (
+                    workspaceId: workspaceId,
+                    path: Self.extractJetBrainsWorkspacePath(at: fullPath),
+                    modified: modified
+                ))
+        }
+        return results
+    }
+
+    /// 从 workspace XML 中提取项目绝对路径。
+    /// IDEA 在项目结构节点里记录形如 `file:///Users/.../project` 的 URL；取其中最浅（最短）的一条
+    /// 作为项目根目录。仅含 `$PROJECT_DIR$` 宏（无绝对路径）时返回 nil。
+    static func extractJetBrainsWorkspacePath(at filePath: String) -> String? {
+        guard let data = FileManager.default.contents(atPath: filePath),
+            let xml = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+        let pattern = #"file://(/[^\s"\\}]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsRange = NSRange(xml.startIndex..., in: xml)
+        var candidates = Set<String>()
+        for match in regex.matches(in: xml, range: nsRange) {
+            guard let r = Range(match.range(at: 1), in: xml) else { continue }
+            candidates.insert(String(xml[r]))
+        }
+        // 项目根目录通常是最浅（路径最短）的那条候选
+        return candidates.min(by: { $0.count < $1.count })
+    }
+
+    /// 解析 JetBrains recentProjects.xml 内容，按最后打开时间降序返回。
+    /// 提取为静态方法以便单元测试。
+    static func parseJetBrainsRecentProjectsXML(_ xml: String, ideType: IDEType, limit: Int)
+        -> [IDEProject]
+    {
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
 
         var projects: [IDEProject] = []
         var seenPaths = Set<String>()  // 用于去重
 
-        // 简单的 XML 解析，查找 recentPaths 中的路径
-        // JetBrains 使用 $USER_HOME$ 作为 home 目录占位符
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-
-        // 匹配 <option name="recentPaths"> 或 <entry key="..."> 中的路径
-        let pattern = #"<(?:option value|entry key)="([^"]+)"(?:/)?>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return []
-        }
-
-        let matches = regex.matches(in: xml, range: NSRange(xml.startIndex..., in: xml))
-
-        for match in matches {
-            guard projects.count < limit,
-                let range = Range(match.range(at: 1), in: xml)
+        // 现代 JetBrains（含 IDEA 2026.1）把最近项目存放在 additionalInfo 的 <entry> map 中。
+        // 重要：XML 中 entry 的顺序是"首次加入"的插入顺序，并非最近打开顺序；
+        // 每个项目的最近激活时间记录在块内的 activationTimestamp（毫秒时间戳）里，
+        // 必须读取它并按时间排序，最近打开的项目才会出现在列表最前。
+        for entry in parseJetBrainsEntries(xml) {
+            // 去重 + 跳过不存在的路径
+            guard !seenPaths.contains(entry.path),
+                FileManager.default.fileExists(atPath: entry.path)
             else {
                 continue
             }
+            seenPaths.insert(entry.path)
 
-            var path = String(xml[range])
-
-            // 替换 $USER_HOME$
-            path = path.replacingOccurrences(of: "$USER_HOME$", with: homeDir)
-
-            // 去重：跳过已经添加过的路径
-            guard !seenPaths.contains(path) else { continue }
-
-            // 跳过非目录路径
-            guard FileManager.default.fileExists(atPath: path) else { continue }
-
-            seenPaths.insert(path)
-
-            let name = (path as NSString).lastPathComponent
+            let name = (entry.path as NSString).lastPathComponent
             projects.append(
                 IDEProject(
                     name: name,
-                    path: path,
+                    path: entry.path,
+                    lastOpened: entry.lastOpened,
                     ideType: ideType
                 ))
         }
 
-        return projects
+        // 兜底：极老版本只有 recentPaths 列表（<option value="...">），不含 entry map，
+        // 此时无法获取时间戳，仅按文件中出现顺序返回。
+        if projects.isEmpty {
+            let legacyPattern = #"<option value="([^"]+)"(?:/)?>"#
+            if let regex = try? NSRegularExpression(pattern: legacyPattern) {
+                for match in regex.matches(in: xml, range: NSRange(xml.startIndex..., in: xml)) {
+                    guard let range = Range(match.range(at: 1), in: xml) else { continue }
+
+                    let projectPath = String(xml[range])
+                        .replacingOccurrences(of: "$USER_HOME$", with: homeDir)
+
+                    guard !seenPaths.contains(projectPath),
+                        FileManager.default.fileExists(atPath: projectPath)
+                    else {
+                        continue
+                    }
+                    seenPaths.insert(projectPath)
+
+                    let name = (projectPath as NSString).lastPathComponent
+                    projects.append(
+                        IDEProject(name: name, path: projectPath, ideType: ideType))
+                }
+            }
+        }
+
+        // 按最后打开时间降序排序（最近打开的排最前），无时间戳的排到最后
+        projects.sort { lhs, rhs in
+            switch (lhs.lastOpened, rhs.lastOpened) {
+            case let (l?, r?): return l > r
+            case (nil, _?): return false
+            case (_?, nil): return true
+            default: return false
+            }
+        }
+
+        // 排序后再截断，确保拿到的是最近打开的若干个（而非 XML 中靠前的若干个）
+        return projects.count > limit ? Array(projects.prefix(limit)) : projects
+    }
+
+    /// 从 recentProjects.xml 解析出原始 entry 列表：项目路径、workspaceId、最近打开时间。
+    /// 不做去重、不排序、不截断，也不检查路径是否存在——供合并逻辑与上面的 XML 解析共用。
+    static func parseJetBrainsEntries(_ xml: String)
+        -> [(path: String, workspaceId: String?, lastOpened: Date?)]
+    {
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        var entries: [(path: String, workspaceId: String?, lastOpened: Date?)] = []
+
+        let entryPattern = #"<entry\s+key="([^"]+)"[^>]*>([\s\S]*?)</entry>"#
+        guard let entryRegex = try? NSRegularExpression(pattern: entryPattern) else {
+            return entries
+        }
+        for match in entryRegex.matches(in: xml, range: NSRange(xml.startIndex..., in: xml)) {
+            guard let keyRange = Range(match.range(at: 1), in: xml),
+                let bodyRange = Range(match.range(at: 2), in: xml)
+            else {
+                continue
+            }
+            let projectPath = String(xml[keyRange])
+                .replacingOccurrences(of: "$USER_HOME$", with: homeDir)
+            let body = String(xml[bodyRange])
+            entries.append(
+                (
+                    path: projectPath,
+                    workspaceId: parseJetBrainsWorkspaceId(in: body),
+                    lastOpened: parseJetBrainsTimestamp(in: body)
+                ))
+        }
+        return entries
+    }
+
+    /// 从 <entry> 块内容中解析 projectWorkspaceId（workspace/ 目录下的文件名即此值）。
+    private static func parseJetBrainsWorkspaceId(in body: String) -> String? {
+        let pattern = #"projectWorkspaceId="([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+            let match = regex.firstMatch(in: body, range: NSRange(body.startIndex..., in: body)),
+            let range = Range(match.range(at: 1), in: body)
+        else {
+            return nil
+        }
+        return String(body[range])
+    }
+
+    /// 从 <entry> 块内容中解析最后打开时间。
+    /// 优先 activationTimestamp（最近激活时间），其次退回到 projectOpenTimestamp（首次打开时间）。
+    /// 时间戳为毫秒级 Unix 时间。
+    private static func parseJetBrainsTimestamp(in body: String) -> Date? {
+        for key in ["activationTimestamp", "projectOpenTimestamp"] {
+            let pattern = "<option name=\"" + key + "\" value=\"(\\d+)\""
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                let match = regex.firstMatch(in: body, range: NSRange(body.startIndex..., in: body)),
+                let range = Range(match.range(at: 1), in: body),
+                let ms = Double(body[range])
+            else {
+                continue
+            }
+            return Date(timeIntervalSince1970: ms / 1000.0)
+        }
+        return nil
     }
 
     // MARK: - Antigravity
