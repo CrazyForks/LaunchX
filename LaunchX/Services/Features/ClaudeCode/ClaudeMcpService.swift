@@ -208,6 +208,42 @@ final class ClaudeMcpService: ObservableObject {
         return String(describing: value.value).tomlQuoted
     }
 
+    /// 将 serverConfig 渲染为 TOML 表体文本（供 Codex 表单展示/编辑）
+    /// 常用字段（command / args / env / type / url）优先排序，其余按键名字典序。
+    func renderTomlBody(_ config: [String: AnyCodable]) -> String {
+        let preferred = ["command", "args", "env", "type", "url"]
+        let keys = config.keys.sorted { a, b in
+            let ai = preferred.firstIndex(of: a) ?? Int.max
+            let bi = preferred.firstIndex(of: b) ?? Int.max
+            if ai != bi { return ai < bi }
+            return a < b
+        }
+        return keys.map { key in
+            "\(key) = \(anyCodableToToml(config[key]!))"
+        }.joined(separator: "\n")
+    }
+
+    /// 解析用户在 Codex 表单中输入的 TOML 文本
+    /// 支持两种写法：
+    ///   1. 仅表体：command = "npx" / args = ["-y", "server"] / env = { KEY = "v" }
+    ///   2. 完整表：[mcp_servers.<name>] 表头 + 表体（表头名称可用于自动填充）
+    /// 返回 nil 表示无法解析出任何有效内容。
+    func parseCodexMcpToml(_ text: String) -> (name: String?, config: [String: AnyCodable])? {
+        let (header, values) = TomlValueParser.parseTable(text)
+        guard !values.isEmpty || header != nil else { return nil }
+
+        var config: [String: AnyCodable] = [:]
+        for (key, value) in values {
+            config[key] = AnyCodable(value)
+        }
+
+        var name: String? = nil
+        if let header = header, header.hasPrefix("mcp_servers.") {
+            name = String(header.dropFirst("mcp_servers.".count))
+        }
+        return (name, config)
+    }
+
     // MARK: - 导入
 
     /// 从 ~/.claude.json 导入 MCP
@@ -271,7 +307,8 @@ final class ClaudeMcpService: ObservableObject {
                 continue
             }
 
-            let keyValues = doc.getAllKeyValues(in: section)
+            // 使用类型化解析，保留数组 / 内联表 / 布尔 / 数字的原始类型
+            let keyValues = doc.getAllTypedValues(in: section)
             var config: [String: AnyCodable] = [:]
             for (key, value) in keyValues {
                 config[key] = AnyCodable(value)

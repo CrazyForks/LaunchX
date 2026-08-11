@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// Codex MCP 服务器添加/编辑表单
+/// Codex 的 MCP 配置存于 ~/.codex/config.toml（TOML），因此这里原生使用 TOML 输入，
+/// 与 Claude 表单（JSON）区分开。
 struct CodexMcpFormView: View {
     @Binding var isPresented: Bool
     @StateObject private var service = ClaudeMcpService.shared
     var editingServer: McpServer?
 
     @State private var name: String = ""
-    @State private var configJson: String = ""
+    @State private var configToml: String = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -37,7 +39,7 @@ struct CodexMcpFormView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    TextEditor(text: $configJson)
+                    TextEditor(text: $configToml)
                         .font(.system(size: 11, design: .monospaced))
                         .frame(minHeight: 180)
                         .padding(8)
@@ -49,11 +51,11 @@ struct CodexMcpFormView: View {
                         )
 
                     HStack {
-                        Text("JSON 格式的服务器配置")
+                        Text("TOML 格式的服务端配置（可含 [mcp_servers.<名称>] 表头）")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                         Spacer()
-                        Button("格式化") { formatJson() }
+                        Button("格式化") { formatToml() }
                             .font(.system(size: 11))
                             .controlSize(.small)
                     }
@@ -82,7 +84,7 @@ struct CodexMcpFormView: View {
                     .keyboardShortcut(.cancelAction)
                 Button(editingServer != nil ? "保存" : "添加") { saveServer() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(name.isEmpty || configJson.isEmpty)
+                    .disabled(configToml.isEmpty)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -91,54 +93,41 @@ struct CodexMcpFormView: View {
         .onAppear {
             if let server = editingServer {
                 name = server.name
-                let dict = server.serverConfig.mapValues { $0.value }
-                if let data = try? JSONSerialization.data(
-                    withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
-                   let str = String(data: data, encoding: .utf8)
-                {
-                    configJson = str
-                }
+                configToml = service.renderTomlBody(server.serverConfig)
             } else {
-                configJson = """
-                    {
-                      "args": [
-                        "-y",
-                        "@modelcontextprotocol/server-filesystem"
-                      ],
-                      "command": "npx"
-                    }
-                    """
+                configToml = """
+                command = "npx"
+                args = ["-y", "@modelcontextprotocol/server-filesystem"]
+                """
             }
         }
     }
 
-    private func formatJson() {
-        guard let data = configJson.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data),
-              let formatted = try? JSONSerialization.data(
-                withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-              let str = String(data: formatted, encoding: .utf8)
-        else {
-            errorMessage = "无效的 JSON 格式"
+    private func formatToml() {
+        guard let (_, config) = service.parseCodexMcpToml(configToml) else {
+            errorMessage = "无效的 TOML 格式"
             return
         }
         errorMessage = nil
-        configJson = str
+        configToml = service.renderTomlBody(config)
     }
 
     private func saveServer() {
-        guard let data = configJson.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            errorMessage = "无效的 JSON 格式"
+        guard let parsed = service.parseCodexMcpToml(configToml) else {
+            errorMessage = "无效的 TOML 格式"
             return
         }
 
-        var config: [String: AnyCodable] = [:]
-        for (key, value) in json {
-            config[key] = AnyCodable(value)
+        // 名称优先取输入框，为空时回退到 TOML 表头
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let finalName = trimmedName.isEmpty ? (parsed.name ?? "") : trimmedName
+        if finalName.isEmpty {
+            errorMessage = "请填写名称"
+            return
         }
+        name = finalName
 
+        let config = parsed.config
         if let error = service.validateConfig(config) {
             errorMessage = error
             return
@@ -148,7 +137,7 @@ struct CodexMcpFormView: View {
 
         if let existing = editingServer {
             var updated = existing
-            updated.name = name
+            updated.name = finalName
             updated.serverConfig = config
             do {
                 try service.updateServer(updated)
@@ -157,7 +146,7 @@ struct CodexMcpFormView: View {
                 return
             }
         } else {
-            let server = McpServer(name: name, serverConfig: config, apps: [.codex])
+            let server = McpServer(name: finalName, serverConfig: config, apps: [.codex])
             do {
                 guard try service.addServer(server) == nil else { return }
             } catch {
