@@ -2,6 +2,7 @@
 
 ## v0.3.17
 - 修复 codex mcp的配置
+- 把codex的provider配置改为从环境变量放到toml配置文件bearer_token，避免obsidian之类GUI启动丢失环境变量
 
 ## v0.3.16
 - claude/codex 的上下文隔离，修复切换同时适用2个工具的上下文切换的问题

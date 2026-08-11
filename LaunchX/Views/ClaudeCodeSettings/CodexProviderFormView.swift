@@ -41,15 +41,21 @@ struct CodexProviderFormView: View {
                     // Model
                     fieldRow(label: "Model", placeholder: "例如：o3, gpt-4.1", text: $model)
 
-                    // Env Key
-                    HStack(spacing: 12) {
-                        Text("环境变量名")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 80, alignment: .trailing)
-                            .padding(.top, 4)
-                        TextField("OPENAI_API_KEY", text: $envKey)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
+                    // Env Key（仅当未填写 API Key 时作为回退）
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 12) {
+                            Text("环境变量名")
+                                .font(.system(size: 12, weight: .medium))
+                                .frame(width: 80, alignment: .trailing)
+                                .padding(.top, 4)
+                            TextField("OPENAI_API_KEY", text: $envKey)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                        }
+                        Text("仅当未填写 API Key 时使用：写入 env_key，由你自行在环境中设置该变量")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 92)
                     }
 
                     // API Key
@@ -78,7 +84,7 @@ struct CodexProviderFormView: View {
                                 .frame(width: 24)
                             }
                         }
-                        Text("API Key 将自动写入 shell 配置文件并设置为环境变量")
+                        Text("API Key 将直接写入 config.toml 的 experimental_bearer_token 字段，随配置生效（无需配置 shell 环境变量）")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                             .padding(.leading, 92)
@@ -170,7 +176,12 @@ struct CodexProviderFormView: View {
         lines.append("name = \"\(name.isEmpty ? "..." : name)\"")
         if !baseUrl.isEmpty { lines.append("base_url = \"\(baseUrl)\"") }
         lines.append("wire_api = \"responses\"")
-        lines.append("env_key = \"\(resolvedEnvKey)\"")
+        if !apiKey.isEmpty {
+            // 预览中掩码真实 Key，避免明文上屏
+            lines.append("experimental_bearer_token = \"<your-api-key>\"")
+        } else {
+            lines.append("env_key = \"\(resolvedEnvKey)\"")
+        }
         return lines.joined(separator: "\n")
     }
 

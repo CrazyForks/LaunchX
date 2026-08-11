@@ -235,7 +235,13 @@ final class ClaudeProviderService: ObservableObject {
 
     // MARK: - Codex 配置同步
 
-    /// 将 Provider 配置写入 Codex 的 config.toml，并自动设置环境变量
+    /// 将 Provider 配置写入 Codex 的 config.toml。
+    ///
+    /// 鉴权：Codex 的 `env_key` 仅接受"环境变量名"，真正取值依赖进程环境；
+    /// 而 Codex 从 GUI / 非交互 shell 启动时未必 source rc，导致环境变量缺失、鉴权失败。
+    /// 因此这里改为在 config.toml 内直接写 `experimental_bearer_token`，让 Key 随配置自包含生效。
+    /// 官方要求 env_key / experimental_bearer_token / auth.command 三者互斥，
+    /// 故写入 bearer_token 时不会同时写 env_key。
     func writeCodexSettings(_ provider: ClaudeProvider) throws {
         let config = provider.settingsConfig
 
@@ -268,62 +274,50 @@ final class ClaudeProviderService: ObservableObject {
             doc.set("base_url", value: baseUrl, in: providerSection)
         }
         doc.set("wire_api", value: "responses", in: providerSection)
-        doc.set("env_key", value: envKey, in: providerSection)
+
+        // 鉴权字段：env_key / experimental_bearer_token / auth.command 三者互斥。
+        // 优先直接写 bearer token，使 Key 随 config.toml 自包含生效、不依赖 shell 环境；
+        // 仅在未提供 Key 时回退到 env_key（登记变量名，由用户自行设置环境）。
+        if let apiKey, !apiKey.isEmpty {
+            doc.set("experimental_bearer_token", value: apiKey, in: providerSection)
+        } else {
+            doc.set("env_key", value: envKey, in: providerSection)
+        }
 
         try store.ensureCodexDir()
         try store.writeCodexConfig(doc)
 
-        // 2. 自动写入 shell 环境变量
-        if let apiKey {
-            try writeCodexEnvVars(envKey: envKey, apiKey: apiKey)
-        }
+        // 旧版本（≤ 写 .zshrc 的版本）会在 shell 配置里留下明文 Key 的标记段，
+        // 新版本已改用 bearer token，这里做一次性清理。
+        try? removeCodexShellBlock()
     }
 
-    /// 自动将 Codex 环境变量写入 shell 配置文件
-    /// 使用标记段便于后续更新，不会影响用户其他配置
-    private func writeCodexEnvVars(envKey: String, apiKey: String) throws {
+    /// 清理旧版本残留在 shell 配置文件中的 LaunchX Codex 标记段。
+    /// 新版本已改用 config.toml 的 experimental_bearer_token 承载 Key，不再向
+    /// .zshrc / .bashrc / .profile 写入 export；这里仅一次性移除历史遗留的标记段，
+    /// 避免磁盘上残留明文 Key 或失效的环境变量。幂等，无标记段时为空操作。
+    private func removeCodexShellBlock() throws {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        let shellRCPath: String
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        if shell.contains("zsh") {
-            shellRCPath = home + "/.zshrc"
-        } else if shell.contains("bash") {
-            shellRCPath = home + "/.bashrc"
-        } else {
-            shellRCPath = home + "/.profile"
-        }
-
+        let candidates = [home + "/.zshrc", home + "/.bashrc", home + "/.profile"]
         let beginMarker = "# >>> LaunchX Codex >>>"
         let endMarker = "# <<< LaunchX Codex <<<"
 
-        var content = ""
-        if fileManager.fileExists(atPath: shellRCPath),
-           let existing = try? String(contentsOfFile: shellRCPath, encoding: .utf8) {
-            content = existing
-        }
-
-        let newBlock = """
-        \(beginMarker)
-        export \(envKey)="\(apiKey)"
-        \(endMarker)
-        """
-
-        // 如果已有标记段，替换；否则追加
-        if content.contains(beginMarker) && content.contains(endMarker),
-           let beginRange = content.range(of: beginMarker),
-           let endRange = content.range(of: endMarker) {
-            content.replaceSubrange(beginRange.lowerBound..<endRange.upperBound, with: newBlock)
-        } else {
-            if !content.hasSuffix("\n") && !content.isEmpty {
-                content += "\n"
+        for path in candidates {
+            guard fileManager.fileExists(atPath: path),
+                  let content = try? String(contentsOfFile: path, encoding: .utf8),
+                  content.contains(beginMarker), content.contains(endMarker),
+                  let beginRange = content.range(of: beginMarker),
+                  let endRange = content.range(of: endMarker) else {
+                continue
             }
-            content += "\n\(newBlock)\n"
+            var updated = content
+            updated.removeSubrange(beginRange.lowerBound..<endRange.upperBound)
+            // 收敛因移除段而留下的连续空行
+            while updated.contains("\n\n\n") {
+                updated = updated.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+            }
+            try updated.write(toFile: path, atomically: true, encoding: .utf8)
         }
-
-        try content.write(toFile: shellRCPath, atomically: true, encoding: .utf8)
-
-        // 同时设置当前进程的环境变量（让本次 session 也生效）
-        setenv(envKey, apiKey, 1)
     }
 
     /// 从已有 Codex 配置导入 Provider
