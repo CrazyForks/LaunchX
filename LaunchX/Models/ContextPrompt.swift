@@ -7,7 +7,7 @@ enum ContextPromptCategory: String, Codable, CaseIterable {
     case general
     case coding
     case review
-    case communication
+    case testing
     case expert
 
     var displayName: String {
@@ -15,7 +15,7 @@ enum ContextPromptCategory: String, Codable, CaseIterable {
         case .general: return "通用"
         case .coding: return "编码"
         case .review: return "代码审查"
-        case .communication: return "沟通"
+        case .testing: return "测试"
         case .expert: return "专家"
         }
     }
@@ -25,7 +25,7 @@ enum ContextPromptCategory: String, Codable, CaseIterable {
         case .general: return "text.bubble"
         case .coding: return "chevron.left.forwardslash.chevron.right"
         case .review: return "checkmark.seal"
-        case .communication: return "person.2"
+        case .testing: return "checklist"
         case .expert: return "graduationcap"
         }
     }
