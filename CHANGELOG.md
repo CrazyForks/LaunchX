@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.18
+- 修复 JetBrains 系列的软件如果已经打开项目，再次通过快捷面板打开项目时会新开空项目的问题
+- 统一了claude code & codex 新增上下文的预设上下文，并且优化了默认预设上下文
+
 ## v0.3.17
 - 修复 codex mcp的配置
 - 把codex的provider配置改为从环境变量放到toml配置文件bearer_token，避免obsidian之类GUI启动丢失环境变量

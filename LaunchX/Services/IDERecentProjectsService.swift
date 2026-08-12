@@ -89,15 +89,7 @@ final class IDERecentProjectsService {
     ///   - folderPath: 文件夹路径
     ///   - appPath: 应用路径
     func openFolder(_ folderPath: String, withApp appPath: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-a", appPath, folderPath]
-
-        do {
-            try process.run()
-        } catch {
-            print("Failed to open folder: \(error)")
-        }
+        launch(targetPath: folderPath, withAppAt: appPath, isJetBrains: isJetBrainsApp(appPath))
     }
 
     /// 获取指定 IDE 的最近项目
@@ -128,14 +120,47 @@ final class IDERecentProjectsService {
     ///   - project: 项目
     ///   - idePath: IDE 应用路径
     func openProject(_ project: IDEProject, withIDEAt idePath: String) {
+        launch(targetPath: project.path, withAppAt: idePath, isJetBrains: project.ideType.isJetBrains)
+    }
+
+    /// 判断指定应用路径是否为 JetBrains 系列 IDE（用于决定打开方式）
+    private func isJetBrainsApp(_ appPath: String) -> Bool {
+        IDEType.detect(from: appPath)?.isJetBrains == true
+    }
+
+    /// 启动应用并打开目标路径（项目文件夹或普通文件夹）。
+    ///
+    /// JetBrains 系列必须走 IDE 自带的启动器二进制 `Contents/MacOS/<exec>`，而非 `open -a`：
+    /// `open -a <app> <path>` 走 macOS LaunchServices 的「打开文档」Apple Event，当目标项目已打开
+    /// （尤其在全屏 Space 中）时，JetBrains 会新建一个空白窗口、且无法切到已有的全屏面板；
+    /// 改用启动器二进制后，它通过 IPC 把「打开/激活项目」转发给已运行实例，由实例自身激活对应窗口，
+    /// 能正确跨 Space（含全屏）切换，且非全屏时也不再闪烁。其余应用（VSCode/Cursor/Finder 等）
+    /// 沿用 `open -a`，其窗口复用机制不受此问题影响。
+    private func launch(targetPath: String, withAppAt appPath: String, isJetBrains: Bool) {
+        if isJetBrains, let launcherURL = Bundle(path: appPath)?.executableURL {
+            let process = Process()
+            process.executableURL = launcherURL
+            process.arguments = [targetPath]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do {
+                try process.run()
+                return
+            } catch {
+                print(
+                    "Failed to open via JetBrains launcher (\(launcherURL.path)): \(error) — fallback to open -a"
+                )
+            }
+        }
+
+        // 兜底 / 非 JetBrains：沿用 open -a
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-a", idePath, project.path]
-
+        process.arguments = ["-a", appPath, targetPath]
         do {
             try process.run()
         } catch {
-            print("Failed to open project: \(error)")
+            print("Failed to open \(targetPath) with \(appPath): \(error)")
         }
     }
 
