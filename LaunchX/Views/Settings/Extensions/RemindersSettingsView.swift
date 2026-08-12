@@ -9,10 +9,7 @@ struct RemindersSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header with icon, title, and toggle
                 HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
-                    Image(systemName: AdvancedExtensionType.reminders.sfSymbolName)
-                        .font(.system(size: SettingsHeaderStyle.iconSize))
-                        .foregroundColor(AdvancedExtensionType.reminders.iconColor)
-                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    ExtensionHeaderIcon(type: .reminders)
                     Text("提醒事项")
                         .font(SettingsHeaderStyle.titleFont)
                         .fontWeight(SettingsHeaderStyle.titleFontWeight)

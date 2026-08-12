@@ -25,7 +25,7 @@ struct PermissionSettingsView: View {
             // 两个权限一行显示
             HStack(spacing: 12) {
                 PermissionBadge(
-                    icon: "hand.raised.fill",
+                    icon: "accessibility",
                     title: "辅助功能",
                     isGranted: permissionService.isAccessibilityGranted,
                     action: {
@@ -38,7 +38,7 @@ struct PermissionSettingsView: View {
                 )
 
                 PermissionBadge(
-                    icon: "doc.fill",
+                    icon: "internaldrive.fill",
                     title: "磁盘访问",
                     isGranted: permissionService.isFullDiskAccessGranted,
                     action: { permissionService.requestFullDiskAccess() }

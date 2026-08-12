@@ -14,10 +14,7 @@ struct TerminalSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题行
                 HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: SettingsHeaderStyle.iconSize))
-                        .foregroundColor(.gray)
-                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    ExtensionHeaderIcon(type: .terminal)
                     Text("终端设置")
                         .font(SettingsHeaderStyle.titleFont)
                         .fontWeight(SettingsHeaderStyle.titleFontWeight)

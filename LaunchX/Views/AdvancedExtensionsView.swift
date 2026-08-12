@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AdvancedExtensionType: String, CaseIterable, Identifiable {
@@ -6,8 +7,8 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case aiTranslate = "AI 翻译"
     case bookmarkSearch = "搜索书签"
     case twoFactorAuth = "2FA 短信"
-    case terminal = "终端"
     case reminders = "提醒事项"
+    case terminal = "终端"
     case claudeCode = "Claude Code"
     case codex = "Codex"
 
@@ -33,6 +34,34 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         }
     }
 
+    /// macOS 自带应用的 bundle id（若用其 App 图标作为侧边栏图标）。优先级高于 SF Symbol，
+    /// 解析失败（如应用未安装）时自动回退到 SF Symbol 渐变方块。
+    var systemAppBundleId: String? {
+        switch self {
+        case .reminders: return "com.apple.reminders"
+        case .terminal: return "com.apple.Terminal"
+        default: return nil
+        }
+    }
+
+    /// 系统应用图标缓存，避免侧边栏每次渲染都查 LaunchServices
+    private static let appIconCache = NSCache<NSString, NSImage>()
+
+    /// 按 bundle id 解析系统应用图标（带缓存）
+    static func systemAppIcon(forBundleId bundleId: String) -> NSImage? {
+        if let cached = appIconCache.object(forKey: bundleId as NSString) {
+            return cached
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
+        else {
+            return nil
+        }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: 32, height: 32)
+        appIconCache.setObject(icon, forKey: bundleId as NSString)
+        return icon
+    }
+
     var sfSymbolName: String {
         switch self {
         case .clipboard: return "doc.on.clipboard.fill"
@@ -49,12 +78,12 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 
     var iconColor: Color {
         switch self {
-        case .clipboard: return .blue
+        case .clipboard: return Color(red: 230/255, green: 194/255, blue: 124/255)  // #E6C27C
         case .snippet: return .orange
         case .aiTranslate: return .indigo
         case .bookmarkSearch: return .pink
         case .twoFactorAuth: return .green
-        case .terminal: return .gray
+        case .terminal: return Color(red: 0.22, green: 0.22, blue: 0.24)
         case .reminders: return .purple
         case .claudeCode: return .brown
         case .codex: return .green
@@ -154,6 +183,7 @@ struct ExtensionSidebarItem: View {
     let iconImageName: String?
     let sfSymbolName: String
     let iconColor: Color
+    let systemAppIcon: NSImage?
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -166,6 +196,9 @@ struct ExtensionSidebarItem: View {
         self.iconImageName = type.iconImageName
         self.sfSymbolName = type.sfSymbolName
         self.iconColor = type.iconColor
+        self.systemAppIcon = type.systemAppBundleId.flatMap {
+            AdvancedExtensionType.systemAppIcon(forBundleId: $0)
+        }
         self.title = type.rawValue
         self.isSelected = isSelected
         self.action = action
@@ -174,17 +207,7 @@ struct ExtensionSidebarItem: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let imageName = iconImageName, let logo = NSImage(named: imageName) {
-                    Image(nsImage: logo)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                } else {
-                    Image(systemName: sfSymbolName)
-                        .font(.system(size: 14))
-                        .foregroundColor(iconColor)
-                        .frame(width: 14, alignment: .center)
-                }
+                iconView
                 Text(title)
                     .foregroundColor(.primary)
                 Spacer()
@@ -198,6 +221,43 @@ struct ExtensionSidebarItem: View {
         .buttonStyle(.plain)
         .focusable(false)
         .padding(.horizontal, 8)
+    }
+
+    /// 侧边栏图标：品牌 logo 直接展示；功能项用「渐变圆角方块 + 白色 SF Symbol」，
+    /// 使其视觉权重与品牌 logo 接近，整体更精致统一。两类图标统一放在 20×20 容器中，
+    /// 保证多行之间的文字左边缘对齐。
+    @ViewBuilder
+    private var iconView: some View {
+        if let imageName = iconImageName, let logo = NSImage(named: imageName) {
+            Image(nsImage: logo)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+                .frame(width: 20, height: 20)
+        } else if let appIcon = systemAppIcon {
+            // macOS 自带应用图标（提醒事项 / 终端）：按 bundle id 取真实 App 图标，
+            // 与品牌 logo 同样以图片方式渲染，比 SF Symbol 更精致。
+            Image(nsImage: appIcon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [iconColor.opacity(0.82), iconColor],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Image(systemName: sfSymbolName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 20, height: 20)
+            .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
+        }
     }
 }
 

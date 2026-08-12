@@ -19,10 +19,7 @@ struct ClipboardSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题行
                 HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
-                    Image(systemName: "doc.on.clipboard.fill")
-                        .font(.system(size: SettingsHeaderStyle.iconSize))
-                        .foregroundColor(.blue)
-                        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+                    ExtensionHeaderIcon(type: .clipboard)
                     Text("剪贴板")
                         .font(SettingsHeaderStyle.titleFont)
                         .fontWeight(SettingsHeaderStyle.titleFontWeight)

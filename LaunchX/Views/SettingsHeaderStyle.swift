@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 设置页面顶部样式常量
@@ -25,5 +26,33 @@ enum SettingsHeaderStyle {
 
     /// 底部内边距
     static let bottomPadding: CGFloat = 16
+}
+
+/// 扩展设置页顶部的图标，与侧边栏 `ExtensionSidebarItem` 的图标保持一致：
+/// 优先级为「品牌 logo > 系统 App 图标 > 带颜色的 SF Symbol」，统一固定 frame 尺寸。
+/// 用法：`ExtensionHeaderIcon(type: .reminders)`
+struct ExtensionHeaderIcon: View {
+    let type: AdvancedExtensionType
+
+    var body: some View {
+        Group {
+            if let name = type.iconImageName, let logo = NSImage(named: name) {
+                Image(nsImage: logo)
+                    .resizable()
+                    .scaledToFit()
+            } else if let appIcon = type.systemAppBundleId.flatMap({
+                AdvancedExtensionType.systemAppIcon(forBundleId: $0)
+            }) {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: type.sfSymbolName)
+                    .font(.system(size: SettingsHeaderStyle.iconSize))
+                    .foregroundColor(type.iconColor)
+            }
+        }
+        .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
+    }
 }
 

@@ -32,7 +32,7 @@ struct OnboardingView: View {
             // Permissions Section
             VStack(spacing: 12) {
                 PermissionRow(
-                    icon: "hand.raised.fill",
+                    icon: "accessibility",
                     iconColor: .blue,
                     title: "辅助功能",
                     description: "用于全局快捷键唤起搜索面板",
@@ -44,7 +44,7 @@ struct OnboardingView: View {
                 )
 
                 PermissionRow(
-                    icon: "doc.fill",
+                    icon: "internaldrive.fill",
                     iconColor: .purple,
                     title: "完全磁盘访问",
                     description: "用于搜索文档和读取 IDE 最近项目",
