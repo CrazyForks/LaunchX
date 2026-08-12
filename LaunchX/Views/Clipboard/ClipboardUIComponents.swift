@@ -18,6 +18,25 @@ class ClipboardCellView: NSTableCellView {
     private var previewImageWidthConstraint: NSLayoutConstraint?
     private var previewImageHeightConstraint: NSLayoutConstraint?
 
+    /// 文字最大展示行数（多行/单行统一上限）
+    static let maxLines = 5
+
+    /// 逻辑行数阈值：超过该值（即 ≥3 行）改用「每行单行 + 尾部 … 截断」，
+    /// 便于快速浏览多行内容（如日志）的头部；1~2 行则按词换行，尽量展示完整内容。
+    static let perLineTruncationThreshold = 2
+
+    /// 文本的逻辑行数（按换行分段，忽略首尾空白/换行；空文本算 1 行）。
+    static func logicalLineCount(in text: String) -> Int {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return 1 }
+        return normalized.components(separatedBy: "\n").count
+    }
+
+    /// 是否采用「每行单行截断」展示（逻辑行数较多时，如日志）。
+    static func usesPerLineTruncation(for text: String) -> Bool {
+        logicalLineCount(in: text) > perLineTruncationThreshold
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupUI()
@@ -56,8 +75,8 @@ class ClipboardCellView: NSTableCellView {
         contentLabel.isBordered = false
         contentLabel.backgroundColor = .clear
         contentLabel.font = .systemFont(ofSize: 13)
-        contentLabel.lineBreakMode = .byTruncatingTail
-        contentLabel.maximumNumberOfLines = 5  // 改为5行限制
+        contentLabel.lineBreakMode = .byWordWrapping
+        contentLabel.maximumNumberOfLines = Self.maxLines
         contentLabel.cell?.wraps = true
         contentLabel.cell?.truncatesLastVisibleLine = true
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -195,6 +214,15 @@ class ClipboardCellView: NSTableCellView {
         case .text, .link:
             let text = item.textContent ?? ""
             contentLabel.stringValue = text
+
+            // 单行/少行文本：按词换行（byWordWrapping），尽量展示完整内容；
+            // 多行文本（如日志）：每行单行 + 尾部 … 截断（byTruncatingTail），便于扫头部。
+            // 注意：换行必须用 byWordWrapping，byTruncatingTail + wraps 会导致不换行。
+            let usesTruncation = Self.usesPerLineTruncation(for: text)
+            contentLabel.cell?.wraps = !usesTruncation
+            contentLabel.lineBreakMode = usesTruncation ? .byTruncatingTail : .byWordWrapping
+            contentLabel.maximumNumberOfLines = Self.maxLines
+            contentLabel.cell?.truncatesLastVisibleLine = true
 
             // 文字始终顶部对齐（固定距离顶部，视觉上与图标居中）
             contentLabelCenterYConstraint?.isActive = false

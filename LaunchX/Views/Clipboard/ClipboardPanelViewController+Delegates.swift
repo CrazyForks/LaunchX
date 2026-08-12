@@ -149,14 +149,8 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
         // 文本类型根据内容计算高度
         if item.contentType == .text || item.contentType == .link {
             if let text = item.textContent {
-                // 计算实际显示行数（考虑换行符和长文本自动换行）
-                let newlineCount = text.components(separatedBy: .newlines).count
-
-                // 估算每行可显示的字符数（假设平均每字符约8pt宽度，可用宽度约350pt）
-                let charsPerLine = 44
-                let estimatedLines = max(
-                    newlineCount, (text.count + charsPerLine - 1) / charsPerLine)
-                let lineCount = min(estimatedLines, 5)
+                let lineCount = estimatedLineCount(
+                    for: text, maxLines: ClipboardCellView.maxLines)
 
                 if lineCount > 1 {
                     // 每行约 17pt (13pt 字体 + 行间距)，上下各 8pt padding
@@ -180,6 +174,32 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
 
         // 注意：单击模式的粘贴由 tableView 的 action 处理，而不是 selectionDidChange
         // 这样可以避免键盘导航时意外触发粘贴
+    }
+}
+
+// MARK: - 行高估算
+
+extension ClipboardPanelViewController {
+
+    /// 估算文本在单元格中占据的可视行数，需与 ClipboardCellView 的渲染方式保持一致：
+    /// - 逻辑行数较多（>阈值，如日志）：每行单行截断，可视行数 = min(逻辑行数, maxLines)；
+    /// - 1~2 行（如「命令 + 标题」、单行长文本）：按词换行，按每段字符数累加估算后
+    ///   取 min(估算行数, maxLines)。
+    /// 返回值至少为 1。
+    func estimatedLineCount(for text: String, maxLines: Int) -> Int {
+        let logicalLines = ClipboardCellView.logicalLineCount(in: text)
+        if ClipboardCellView.usesPerLineTruncation(for: text) {
+            return min(max(logicalLines, 1), maxLines)
+        }
+        // 按词换行：累加每个逻辑行换行后的可视行数（假设每行约 44 字符）
+        let charsPerLine = 44
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var visual = 0
+        for segment in normalized.components(separatedBy: "\n") {
+            visual += max(1, (segment.count + charsPerLine - 1) / charsPerLine)
+            if visual >= maxLines { return maxLines }
+        }
+        return min(max(visual, 1), maxLines)
     }
 }
 
