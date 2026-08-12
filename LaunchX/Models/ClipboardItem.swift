@@ -30,6 +30,12 @@ enum ClipboardContentType: String, Codable, CaseIterable {
         case .color: return "paintpalette"
         }
     }
+
+    /// 用于分类筛选的类型（排除已废弃的 .file：文件不再记录）。
+    /// 注意：.file 仍保留在 allCases 中以兼容历史数据的解码，故筛选 UI 用本属性。
+    static var filterableCases: [ClipboardContentType] {
+        allCases.filter { $0 != .file }
+    }
 }
 
 // MARK: - 剪贴板项目

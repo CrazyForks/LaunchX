@@ -201,14 +201,9 @@ final class ClipboardService: ObservableObject {
                 }
             }
 
-            // 不是图片文件，按普通文件处理
-            let paths = fileURLs.map { $0.path }
-            return ClipboardItem(
-                contentType: .file,
-                filePaths: paths,
-                sourceAppBundleId: appInfo.bundleId,
-                sourceAppName: appInfo.name
-            )
+            // 复制文件（文档等）已不再记录：这是低频操作，记录意义不大且占用性能/存储。
+            // 仅保留上面「单个图片文件 → 图片」的转换，其余文件类型一律跳过。
+            return nil
         }
 
         // 2. 检查图片（支持多种图片格式）
@@ -772,7 +767,9 @@ final class ClipboardService: ObservableObject {
 
         // 不再在启动时全量加载所有历史图片的 PNG 到内存。
         // 图片改为按需读取：显示/粘贴时通过 imageData(for:) 经 NSCache → 磁盘懒加载。
-        items = loadedItems
+        // 文件类型已废弃（不再记录新条目），加载时一并过滤掉历史中的 .file 条目，
+        // 下次保存时会自动从磁盘清除。
+        items = loadedItems.filter { $0.contentType != .file }
         updateTotalSize()
     }
 

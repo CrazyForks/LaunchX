@@ -273,7 +273,7 @@ class ClipboardPanelViewController: NSViewController {
         allItem.image?.size = NSSize(width: 14, height: 14)
         filterMenu.addItem(allItem)
 
-        for (index, type) in ClipboardContentType.allCases.enumerated() {
+        for (index, type) in ClipboardContentType.filterableCases.enumerated() {
             let item = NSMenuItem(
                 title: type.displayName, action: #selector(selectFilter(_:)),
                 keyEquivalent: "\(index + 1)")
@@ -445,7 +445,7 @@ class ClipboardPanelViewController: NSViewController {
 
     @objc func selectFilter(_ sender: NSMenuItem) {
         let tag = sender.tag
-        let newFilter: ClipboardContentType? = (tag == -1) ? nil : ClipboardContentType.allCases[tag]
+        let newFilter: ClipboardContentType? = (tag == -1) ? nil : ClipboardContentType.filterableCases[tag]
 
         // 如果点击的是当前已选中的过滤器（非“全部”），则切换回“全部”
         if tag != -1 && selectedFilter == newFilter {
@@ -468,7 +468,7 @@ class ClipboardPanelViewController: NSViewController {
             filterButton.image = NSImage(
                 systemSymbolName: "line.3.horizontal.decrease.circle",
                 accessibilityDescription: "过滤")
-        } else if tag >= 0 && tag < ClipboardContentType.allCases.count {
+        } else if tag >= 0 && tag < ClipboardContentType.filterableCases.count {
             selectedFilter = newFilter
             filterButton.contentTintColor = .systemBlue
             // 选中分类时，按钮图标同步切换为该分类图标，更直观且节省空间
@@ -634,6 +634,14 @@ class ClipboardPanelViewController: NSViewController {
         let clampedY = max(0, min(targetY, maxY))
 
         scrollView.contentView.scroll(to: NSPoint(x: 0, y: clampedY))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    /// 滚动到顶部（最近一条）。面板每次打开时调用，
+    /// 避免停留在上次浏览的滚动位置——回到最近一次复制更符合预期。
+    func scrollToTop() {
+        guard !filteredItems.isEmpty else { return }
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: 0))
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 

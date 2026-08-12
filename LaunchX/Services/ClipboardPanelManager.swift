@@ -80,6 +80,8 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
         isPanelVisible = true
         viewController?.focus()
         viewController?.reloadData()
+        // 每次打开都回到顶部（最近一条），而不是停留在上次的滚动位置
+        viewController?.scrollToTop()
     }
 
     /// 隐藏面板
