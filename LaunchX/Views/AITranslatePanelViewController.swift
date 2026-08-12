@@ -20,11 +20,6 @@ class AITranslatePanelViewController: NSViewController {
     private var inputPlaceholder: NSTextField?
     private var inputHeightConstraint: NSLayoutConstraint?
 
-    private var languageBar: NSView?
-    private var fromLangButton: NSButton?
-    private var swapButton: NSButton?
-    private var toLangButton: NSButton?
-
     private var resultScrollView: NSScrollView?
     private var resultStackView: NSStackView?
     private var resultHeightConstraint: NSLayoutConstraint?
@@ -36,10 +31,6 @@ class AITranslatePanelViewController: NSViewController {
 
     /// 内容高度变化回调
     var onContentHeightChanged: ((CGFloat) -> Void)?
-
-    // 语言菜单
-    private var fromLangMenu: NSMenu?
-    private var toLangMenu: NSMenu?
 
     // MARK: - 状态
 
@@ -147,7 +138,6 @@ class AITranslatePanelViewController: NSViewController {
 
         setupTitleBar()
         setupInputArea()
-        setupLanguageBar()
         setupResultArea()
         setupLoadingIndicator()
 
@@ -237,7 +227,7 @@ class AITranslatePanelViewController: NSViewController {
         self.inputTextView = tv
 
         // 占位符
-        let placeholder = NSTextField(labelWithString: "输入文本并按回车，↑↓ 翻看历史记录")
+        let placeholder = NSTextField(labelWithString: "输入文本，⏎ 翻译，↑↓ 翻看历史记录")
         placeholder.font = .systemFont(ofSize: 15)
         placeholder.textColor = NSColor.placeholderTextColor
         placeholder.translatesAutoresizingMaskIntoConstraints = false
@@ -261,105 +251,8 @@ class AITranslatePanelViewController: NSViewController {
         ])
     }
 
-    private func setupLanguageBar() {
-        guard let containerView = containerView, let inputScrollView = inputScrollView else {
-            return
-        }
-
-        let bar = NSView()
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(bar)
-        self.languageBar = bar
-
-        // 源语言选择按钮
-        let fromBtn = createLanguageButton()
-        fromBtn.target = self
-        fromBtn.action = #selector(showFromLangMenu(_:))
-        bar.addSubview(fromBtn)
-        self.fromLangButton = fromBtn
-
-        // 交换按钮
-        let sBtn = NSButton()
-        sBtn.image = NSImage(
-            systemSymbolName: "arrow.left.arrow.right", accessibilityDescription: "交换")
-        sBtn.bezelStyle = .inline
-        sBtn.isBordered = false
-        sBtn.contentTintColor = .secondaryLabelColor
-        sBtn.target = self
-        sBtn.action = #selector(swapLanguages)
-        sBtn.translatesAutoresizingMaskIntoConstraints = false
-        bar.addSubview(sBtn)
-        self.swapButton = sBtn
-
-        // 目标语言选择按钮
-        let toBtn = createLanguageButton()
-        toBtn.target = self
-        toBtn.action = #selector(showToLangMenu(_:))
-        bar.addSubview(toBtn)
-        self.toLangButton = toBtn
-
-        // 创建语言菜单
-        self.fromLangMenu = createLanguageMenu(isSource: true)
-        self.toLangMenu = createLanguageMenu(isSource: false)
-
-        NSLayoutConstraint.activate([
-            bar.topAnchor.constraint(equalTo: inputScrollView.bottomAnchor, constant: 8),
-            bar.leadingAnchor.constraint(
-                equalTo: containerView.leadingAnchor, constant: 16),
-            bar.trailingAnchor.constraint(
-                equalTo: containerView.trailingAnchor, constant: -16),
-            bar.heightAnchor.constraint(equalToConstant: 40),
-
-            fromBtn.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
-            fromBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            fromBtn.trailingAnchor.constraint(
-                equalTo: sBtn.leadingAnchor, constant: -12),
-            fromBtn.heightAnchor.constraint(equalToConstant: 36),
-
-            sBtn.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
-            sBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            sBtn.widthAnchor.constraint(equalToConstant: 32),
-            sBtn.heightAnchor.constraint(equalToConstant: 32),
-
-            toBtn.leadingAnchor.constraint(equalTo: sBtn.trailingAnchor, constant: 12),
-            toBtn.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
-            toBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            toBtn.heightAnchor.constraint(equalToConstant: 36),
-            toBtn.widthAnchor.constraint(equalTo: fromBtn.widthAnchor),
-        ])
-
-        updateLanguageButtons()
-    }
-
-    private func createLanguageButton() -> NSButton {
-        let button = NSButton()
-        button.bezelStyle = .smallSquare
-        button.isBordered = false
-        button.font = .systemFont(ofSize: 13, weight: .medium)
-        button.contentTintColor = .labelColor
-        button.wantsLayer = true
-        button.layer?.cornerRadius = 18
-        button.layer?.backgroundColor = NSColor(white: 0.25, alpha: 1.0).cgColor
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }
-
-    private func createLanguageMenu(isSource: Bool) -> NSMenu {
-        let menu = NSMenu()
-        for lang: TranslateLanguage in TranslateLanguage.allCases {
-            let item = NSMenuItem(
-                title: lang.displayName,
-                action: isSource ? #selector(selectFromLang(_:)) : #selector(selectToLang(_:)),
-                keyEquivalent: "")
-            item.target = self
-            item.representedObject = lang
-            menu.addItem(item)
-        }
-        return menu
-    }
-
     private func setupResultArea() {
-        guard let containerView = containerView, let languageBar = languageBar else { return }
+        guard let containerView = containerView, let inputScrollView = inputScrollView else { return }
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
@@ -399,7 +292,7 @@ class AITranslatePanelViewController: NSViewController {
         self.resultHeightConstraint = constraint
 
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: languageBar.bottomAnchor, constant: 4),
+            scroll.topAnchor.constraint(equalTo: inputScrollView.bottomAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             scroll.bottomAnchor.constraint(
@@ -455,7 +348,6 @@ class AITranslatePanelViewController: NSViewController {
         settings = AITranslateSettings.load()
         fromLang = settings.defaultFromLang
         toLang = settings.defaultToLang
-        updateLanguageButtons()
         updateServicesDisplay()
     }
 
@@ -765,7 +657,6 @@ class AITranslatePanelViewController: NSViewController {
         // 计算各部分高度
         let titleBarHeight: CGFloat = 44
         let inputHeight: CGFloat = inputHeightConstraint?.constant ?? 60
-        let languageBarHeight: CGFloat = 40
         let padding: CGFloat = 30  // 上下间距
 
         // 计算结果区域的实际内容高度
@@ -780,7 +671,7 @@ class AITranslatePanelViewController: NSViewController {
         resultContentHeight += 16
 
         let totalHeight =
-            titleBarHeight + inputHeight + languageBarHeight + resultContentHeight + padding
+            titleBarHeight + inputHeight + resultContentHeight + padding
 
         // 回调通知面板调整高度
         onContentHeightChanged?(totalHeight)
@@ -868,88 +759,10 @@ class AITranslatePanelViewController: NSViewController {
         }
     }
 
-    private func updateLanguageButtons() {
-        let fromText: String
-        if fromLang == TranslateLanguage.auto {
-            let detected: String = getDetectedLanguageDisplay()
-            fromText = "自动：\(detected)"
-        } else {
-            fromText = fromLang.displayName
-        }
-
-        if let fromBtn: NSButton = fromLangButton {
-            fromBtn.title = "\(fromText)  ▾"
-        }
-
-        let toText: String
-        if toLang == TranslateLanguage.auto {
-            let target: String = getTargetLanguageDisplay()
-            toText = "自动：\(target)"
-        } else {
-            toText = toLang.displayName
-        }
-
-        if let toBtn: NSButton = toLangButton {
-            toBtn.title = "\(toText)  ▾"
-        }
-    }
-
-    private func getDetectedLanguageDisplay() -> String {
-        let text: String =
-            inputTextView?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if text.isEmpty {
-            return "英语"
-        }
-        let detected: TranslateLanguage = AITranslateService.shared.detectLanguage(text)
-        return detected == TranslateLanguage.chinese ? "中文" : "英语"
-    }
-
-    private func getTargetLanguageDisplay() -> String {
-        let text: String =
-            inputTextView?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if text.isEmpty {
-            return "中文"
-        }
-        let detected: TranslateLanguage = AITranslateService.shared.detectLanguage(text)
-        return detected == TranslateLanguage.chinese ? "英语" : "中文"
-    }
-
     // MARK: - 操作
 
     @objc private func togglePin() {
         AITranslatePanelManager.shared.togglePinned()
-    }
-
-    @objc private func showFromLangMenu(_ sender: NSButton) {
-        fromLangMenu?.popUp(
-            positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
-    }
-
-    @objc private func showToLangMenu(_ sender: NSButton) {
-        toLangMenu?.popUp(
-            positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
-    }
-
-    @objc private func selectFromLang(_ sender: NSMenuItem) {
-        if let lang = sender.representedObject as? TranslateLanguage {
-            fromLang = lang
-            updateLanguageButtons()
-        }
-    }
-
-    @objc private func selectToLang(_ sender: NSMenuItem) {
-        if let lang = sender.representedObject as? TranslateLanguage {
-            toLang = lang
-            updateLanguageButtons()
-        }
-    }
-
-    @objc private func swapLanguages() {
-        guard fromLang != TranslateLanguage.auto && toLang != TranslateLanguage.auto else { return }
-        let temp = fromLang
-        fromLang = toLang
-        toLang = temp
-        updateLanguageButtons()
     }
 
 }
@@ -972,10 +785,6 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
 
         if AITranslateService.shared.currentHistoryIndex >= 0 {
             AITranslateService.shared.resetHistoryNavigation()
-        }
-
-        if fromLang == TranslateLanguage.auto || toLang == TranslateLanguage.auto {
-            updateLanguageButtons()
         }
     }
 

@@ -3,8 +3,8 @@ import Cocoa
 /// AI 翻译浮动面板
 class AITranslatePanel: NSPanel {
 
-    /// 圆角半径
-    private let cornerRadius: CGFloat = 12
+    /// 圆角半径（与剪贴板面板保持一致）
+    private let cornerRadius: CGFloat = 10
 
     /// 标题栏高度（只有这个区域可以拖动）
     private let titleBarHeight: CGFloat = 44
@@ -20,7 +20,7 @@ class AITranslatePanel: NSPanel {
     ) {
         super.init(
             contentRect: contentRect,
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: backingStoreType,
             defer: flag
         )
@@ -35,18 +35,10 @@ class AITranslatePanel: NSPanel {
             .ignoresCycle,
         ]
 
-        // 视觉配置
-        self.backgroundColor =
-            NSColor(named: "PanelBackgroundColor") ?? NSColor.windowBackgroundColor
+        // 视觉配置：透明背景，让内容的 NSVisualEffectView 毛玻璃透出（与剪贴板面板一致）
+        self.backgroundColor = .clear
         self.isOpaque = false
         self.hasShadow = true
-        self.titlebarAppearsTransparent = true
-        self.titleVisibility = .hidden
-
-        // 隐藏标题栏按钮
-        self.standardWindowButton(.closeButton)?.isHidden = true
-        self.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        self.standardWindowButton(.zoomButton)?.isHidden = true
 
         // 性能配置
         self.hidesOnDeactivate = false
@@ -55,24 +47,18 @@ class AITranslatePanel: NSPanel {
         self.isMovableByWindowBackground = false
         self.animationBehavior = .none
         self.isRestorable = false
+
+        self.acceptsMouseMovedEvents = true
     }
 
     override var contentView: NSView? {
         didSet {
-            // 确保内容视图有圆角
+            // 内容视图圆角（与剪贴板面板一致：连续圆角 + masksToFit，靠系统 hasShadow 投影）
             if let view = contentView {
                 view.wantsLayer = true
                 view.layer?.cornerRadius = cornerRadius
+                view.layer?.cornerCurve = .continuous
                 view.layer?.masksToBounds = true
-            }
-
-            // 增强阴影效果
-            self.hasShadow = true
-            if let shadowView = contentView?.superview {
-                shadowView.shadow = NSShadow()
-                shadowView.shadow?.shadowColor = NSColor.black.withAlphaComponent(0.45)
-                shadowView.shadow?.shadowOffset = NSSize(width: 0, height: -3)
-                shadowView.shadow?.shadowBlurRadius = 12
             }
         }
     }
